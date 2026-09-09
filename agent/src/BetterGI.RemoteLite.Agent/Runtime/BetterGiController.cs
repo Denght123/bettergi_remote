@@ -15,6 +15,7 @@ internal sealed class BetterGiController
     private readonly AgentSettingsStore _settingsStore;
     private readonly ReportStore _reportStore;
     private readonly FeishuNotifier _feishu;
+    private readonly QqEmailNotifier _qqEmail = new();
     private readonly object _sync = new();
     private ActiveRun? _active;
 
@@ -91,6 +92,16 @@ internal sealed class BetterGiController
     {
         var settings = _settingsStore.Current;
         return new RemoteConfigStore(settings.BetterGiExecutablePath, settings.RemoteConfigName);
+    }
+
+    public async Task<RemoteConfigDto> SyncConfigAsync(CancellationToken cancellationToken)
+    {
+        if (!CanMutate(out var reason))
+        {
+            throw new InvalidOperationException(reason);
+        }
+        var settings = _settingsStore.Current;
+        return await CreateConfigStore().SynchronizeTasksFromSourceAsync(settings.SourceConfigName, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<TaskAccepted> StartAsync(string expectedRevision, CancellationToken cancellationToken)
@@ -215,7 +226,7 @@ internal sealed class BetterGiController
     Completed:
         var report = active.Parser.Finish(finalStatus, DateTimeOffset.UtcNow, finalError);
         await _reportStore.SaveAsync(report).ConfigureAwait(false);
-        await TrySendFeishuAsync(settings, report).ConfigureAwait(false);
+        await SendNotificationsAsync(settings, report).ConfigureAwait(false);
         lock (_sync)
         {
             if (_active == active)
@@ -242,6 +253,29 @@ internal sealed class BetterGiController
         {
             // The local report remains authoritative when notification delivery fails.
         }
+    }
+
+    private async Task TrySendQqEmailAsync(AgentSettings settings, RunReportDto report)
+    {
+        try
+        {
+            var sender = SecretProtector.Unprotect(settings.ProtectedQqEmailAddress);
+            var code = SecretProtector.Unprotect(settings.ProtectedQqSmtpAuthorizationCode);
+            var recipient = SecretProtector.Unprotect(settings.ProtectedNotificationRecipient);
+            if (!string.IsNullOrWhiteSpace(sender) && !string.IsNullOrWhiteSpace(code))
+            {
+                await _qqEmail.SendReportAsync(new QqSmtpSettings(sender, code, string.IsNullOrWhiteSpace(recipient) ? sender : recipient), report).ConfigureAwait(false);
+            }
+        }
+        catch
+        {
+            // Notification failure never changes the authoritative local report.
+        }
+    }
+
+    private async Task SendNotificationsAsync(AgentSettings settings, RunReportDto report)
+    {
+        await Task.WhenAll(TrySendFeishuAsync(settings, report), TrySendQqEmailAsync(settings, report)).ConfigureAwait(false);
     }
 
     private static Process StartBetterGi(string executable, string configName)

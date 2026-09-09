@@ -19,6 +19,11 @@ internal sealed class SettingsForm : Form
     private readonly TextBox _cancelHotkey = new();
     private readonly TextBox _feishuWebhook = new();
     private readonly TextBox _feishuSecret = new() { UseSystemPasswordChar = true };
+    private readonly TextBox _qqEmail = new();
+    private readonly TextBox _qqSmtpCode = new() { UseSystemPasswordChar = true };
+    private readonly TextBox _notificationRecipient = new();
+    private readonly LinkLabel _controlEntry = new() { AutoSize = true };
+    private readonly ToolTip _toolTip = new() { AutoPopDelay = 20_000, InitialDelay = 250, ReshowDelay = 100 };
     private readonly Panel _advancedPanel = new() { AutoSize = true, Dock = DockStyle.Top, Visible = false };
     private readonly LinkLabel _advancedToggle = new() { AutoSize = true, Text = "显示通知和高级设置" };
     private readonly Button _saveButton = new() { AutoSize = true };
@@ -29,10 +34,10 @@ internal sealed class SettingsForm : Form
         _firstRun = firstRun;
         Text = firstRun ? "开始使用 BetterGI Remote" : "BetterGI Remote 电脑端设置";
         StartPosition = FormStartPosition.CenterScreen;
-        MinimumSize = new Size(720, 590);
-        Size = new Size(780, 680);
+        MinimumSize = new Size(760, 640);
+        Size = new Size(860, 780);
         FormBorderStyle = FormBorderStyle.Sizable;
-        BackColor = Color.FromArgb(246, 249, 247);
+        BackColor = Color.FromArgb(238, 232, 218);
 
         var settings = store.Current;
         _betterGiPath.Text = settings.BetterGiExecutablePath;
@@ -40,6 +45,11 @@ internal sealed class SettingsForm : Form
         _cancelHotkey.Text = string.IsNullOrWhiteSpace(settings.CancelHotkey) ? "Ctrl+Shift+F12" : settings.CancelHotkey;
         _feishuWebhook.Text = SecretProtector.Unprotect(settings.ProtectedFeishuWebhook) ?? string.Empty;
         _feishuSecret.Text = SecretProtector.Unprotect(settings.ProtectedFeishuSigningSecret) ?? string.Empty;
+        _qqEmail.Text = SecretProtector.Unprotect(settings.ProtectedQqEmailAddress) ?? string.Empty;
+        _qqSmtpCode.Text = SecretProtector.Unprotect(settings.ProtectedQqSmtpAuthorizationCode) ?? string.Empty;
+        _notificationRecipient.Text = SecretProtector.Unprotect(settings.ProtectedNotificationRecipient) ?? string.Empty;
+        _controlEntry.Text = ProductDefaults.ControlEntryUrl;
+        _controlEntry.LinkClicked += (_, _) => Process.Start(new ProcessStartInfo(ProductDefaults.ControlEntryUrl) { UseShellExecute = true });
         _saveButton.Text = firstRun ? "完成设置并连接手机" : "保存设置";
 
         Controls.Add(BuildContent());
@@ -62,21 +72,32 @@ internal sealed class SettingsForm : Form
 
     private Control BuildHeader()
     {
-        var panel = new Panel { Dock = DockStyle.Top, Height = 112, BackColor = Color.White, Padding = new Padding(28, 22, 28, 16) };
+        var asset = Path.Combine(AppContext.BaseDirectory, "assets", "genshin-character-ensemble.webp");
+        var panel = new HeroPanel
+        {
+            Dock = DockStyle.Top,
+            Height = 184,
+            BackColor = Color.FromArgb(13, 29, 49),
+            Padding = new Padding(34, 36, 28, 20),
+            BackgroundImage = File.Exists(asset) ? Image.FromFile(asset) : null,
+            BackgroundImageLayout = ImageLayout.Zoom,
+        };
         panel.Controls.Add(new Label
         {
             Text = _firstRun ? "连接你的 BetterGI" : "电脑端设置",
             AutoSize = true,
-            Font = new Font(Font.FontFamily, 20, FontStyle.Bold),
-            ForeColor = Color.FromArgb(23, 55, 43),
-            Location = new Point(28, 20),
+            Font = new Font("Microsoft YaHei UI", 23, FontStyle.Bold),
+            ForeColor = Color.FromArgb(248, 239, 215),
+            BackColor = Color.Transparent,
+            Location = new Point(34, 45),
         });
         panel.Controls.Add(new Label
         {
             Text = _firstRun ? "通常只需要一分钟。选择 BetterGI 后，扫描二维码即可在手机上使用。" : "日常任务在手机操作；这里仅用于更换 BetterGI、通知或重新配置。",
             AutoSize = true,
-            ForeColor = Color.FromArgb(82, 101, 92),
-            Location = new Point(30, 64),
+            ForeColor = Color.FromArgb(225, 211, 180),
+            BackColor = Color.Transparent,
+            Location = new Point(36, 98),
         });
         return panel;
     }
@@ -89,7 +110,7 @@ internal sealed class SettingsForm : Form
             AutoScroll = true,
             Padding = new Padding(28, 22, 28, 20),
             ColumnCount = 1,
-            RowCount = 8,
+            RowCount = 9,
             BackColor = BackColor,
         };
         content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -107,11 +128,12 @@ internal sealed class SettingsForm : Form
         content.Controls.Add(Field("远程任务配置", _sourceConfig, "首次创建时会复制为“远程每日”，不会覆盖原配置。"), 0, 2);
 
         content.Controls.Add(Field("连接服务", _serverStatus, "正式版已内置服务器地址，普通用户不需要填写。"), 0, 3);
+        content.Controls.Add(Field("手机控制入口", _controlEntry, "请收藏此固定网址。扫码只用于建立绑定，以后都从这里进入。"), 0, 4);
 
         _advancedToggle.Margin = new Padding(2, 14, 0, 8);
-        content.Controls.Add(_advancedToggle, 0, 4);
+        content.Controls.Add(_advancedToggle, 0, 5);
         BuildAdvancedPanel();
-        content.Controls.Add(_advancedPanel, 0, 5);
+        content.Controls.Add(_advancedPanel, 0, 6);
         content.Controls.Add(new Label
         {
             AutoSize = true,
@@ -119,15 +141,15 @@ internal sealed class SettingsForm : Form
             Margin = new Padding(2, 18, 0, 10),
             ForeColor = Color.FromArgb(82, 101, 92),
             Text = "配置、绑定密钥和通知凭据只保存在当前电脑。手机只能调用固定的状态、配置、启动、停止和报告操作。",
-        }, 0, 6);
+        }, 0, 7);
         return content;
     }
 
     private Control BuildFooter()
     {
-        var footer = new Panel { Dock = DockStyle.Bottom, Height = 78, BackColor = Color.White, Padding = new Padding(28, 17, 28, 14) };
-        _saveButton.BackColor = Color.FromArgb(15, 118, 88);
-        _saveButton.ForeColor = Color.White;
+        var footer = new Panel { Dock = DockStyle.Bottom, Height = 78, BackColor = Color.FromArgb(13, 29, 49), Padding = new Padding(28, 17, 28, 14) };
+        _saveButton.BackColor = Color.FromArgb(214, 181, 106);
+        _saveButton.ForeColor = Color.FromArgb(35, 27, 13);
         _saveButton.FlatStyle = FlatStyle.Flat;
         _saveButton.FlatAppearance.BorderSize = 0;
         _saveButton.Padding = new Padding(18, 7, 18, 7);
@@ -138,13 +160,31 @@ internal sealed class SettingsForm : Form
 
     private void BuildAdvancedPanel()
     {
-        var layout = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1, RowCount = 4, Padding = new Padding(0, 4, 0, 0) };
+        var layout = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1, RowCount = 7, Padding = new Padding(0, 4, 0, 0) };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         layout.Controls.Add(Field("取消任务快捷键", _cancelHotkey, "默认 Ctrl+Shift+F12，小助手会同步到 BetterGI 全局设置。"), 0, 0);
         layout.Controls.Add(Field("自定义连接服务", _relayUrl, "仅用于开发测试或迁移服务器；日常使用无需修改。"), 0, 1);
-        layout.Controls.Add(Field("飞书机器人 Webhook（可选）", _feishuWebhook, "任务结束后由电脑直接发送报告。"), 0, 2);
-        layout.Controls.Add(Field("飞书签名密钥（可选）", _feishuSecret, null), 0, 3);
+        layout.Controls.Add(Field("飞书机器人 Webhook（可选）", _feishuWebhook, "任务结束后由电脑直接发送报告。", HelpIcon("进入飞书群设置 → 群机器人 → 添加自定义机器人，复制 HTTPS Webhook。不要把 Webhook 发给他人。")), 0, 2);
+        layout.Controls.Add(Field("飞书签名密钥（可选）", _feishuSecret, null, HelpIcon("在飞书自定义机器人的安全设置中开启“签名校验”，复制显示的签名密钥。未开启签名时可留空。")), 0, 3);
+        layout.Controls.Add(Field("QQ 发件邮箱（可选）", _qqEmail, "例如 123456@qq.com。", HelpIcon("登录 mail.qq.com → 设置 → 账号与安全 → 安全设置 → POP3/IMAP/SMTP/Exchange/CardDAV 服务，开启 SMTP 服务。")), 0, 4);
+        layout.Controls.Add(Field("QQ 邮箱 SMTP 授权码", _qqSmtpCode, "这是单独生成的授权码，不是 QQ 密码。", HelpIcon("在 QQ 邮箱 SMTP 服务设置中点击“生成授权码”，按提示验证后复制授权码。程序使用 smtp.qq.com:587 加密发送。")), 0, 5);
+        layout.Controls.Add(Field("通知收件邮箱（可选）", _notificationRecipient, "留空则发送给上面的 QQ 邮箱，也可以填写其他邮箱。"), 0, 6);
         _advancedPanel.Controls.Add(layout);
+    }
+
+    private Control HelpIcon(string text)
+    {
+        var icon = new Label
+        {
+            Text = "ⓘ",
+            AutoSize = true,
+            Cursor = Cursors.Help,
+            Font = new Font(SystemFonts.MessageBoxFont!, FontStyle.Bold),
+            ForeColor = Color.FromArgb(193, 153, 72),
+            Padding = new Padding(5),
+        };
+        _toolTip.SetToolTip(icon, text);
+        return icon;
     }
 
     private Control StatusRow()
@@ -243,7 +283,8 @@ internal sealed class SettingsForm : Form
         }
         else if (_sourceConfig.Items.Count > 0)
         {
-            _sourceConfig.SelectedIndex = 0;
+            var configuredSource = _store.Current.SourceConfigName;
+            _sourceConfig.SelectedItem = _sourceConfig.Items.Contains(configuredSource) ? configuredSource : _sourceConfig.Items[0];
         }
         RefreshServerStatus();
     }
@@ -292,13 +333,24 @@ internal sealed class SettingsForm : Form
             {
                 throw new InvalidOperationException("飞书 Webhook 必须是 HTTPS 地址。");
             }
+            if (!string.IsNullOrWhiteSpace(_qqEmail.Text) || !string.IsNullOrWhiteSpace(_qqSmtpCode.Text))
+            {
+                BetterGI.RemoteLite.Notifications.QqEmailNotifier.Validate(new(
+                    _qqEmail.Text.Trim(),
+                    _qqSmtpCode.Text.Trim(),
+                    string.IsNullOrWhiteSpace(_notificationRecipient.Text) ? _qqEmail.Text.Trim() : _notificationRecipient.Text.Trim()));
+            }
 
             var next = _store.Current;
             next.BetterGiExecutablePath = executable;
             next.RelayBaseUrl = relay.GetLeftPart(UriPartial.Authority) + relay.AbsolutePath.TrimEnd('/');
             next.CancelHotkey = _cancelHotkey.Text.Trim();
+            next.SourceConfigName = _sourceConfig.SelectedItem?.ToString() ?? next.SourceConfigName;
             next.ProtectedFeishuWebhook = SecretProtector.Protect(_feishuWebhook.Text.Trim());
             next.ProtectedFeishuSigningSecret = SecretProtector.Protect(_feishuSecret.Text);
+            next.ProtectedQqEmailAddress = SecretProtector.Protect(_qqEmail.Text.Trim());
+            next.ProtectedQqSmtpAuthorizationCode = SecretProtector.Protect(_qqSmtpCode.Text.Trim());
+            next.ProtectedNotificationRecipient = SecretProtector.Protect(_notificationRecipient.Text.Trim());
             if (string.IsNullOrEmpty(next.ProtectedPairingSecret))
             {
                 var secret = PairingKeyMaterial.GenerateSecret();

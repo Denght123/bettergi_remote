@@ -34,6 +34,8 @@ Push-Location (Join-Path $root "agent")
 try {
     dotnet test BetterGI.RemoteLite.sln --configuration Release
     if ($LASTEXITCODE -ne 0) { throw ".NET tests failed with exit code $LASTEXITCODE." }
+    dotnet build BetterGI.RemoteLite.sln --configuration Release --no-restore
+    if ($LASTEXITCODE -ne 0) { throw ".NET agent build failed with exit code $LASTEXITCODE." }
 } finally {
     Pop-Location
 }

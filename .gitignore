@@ -10,6 +10,7 @@ relay/relay.exe
 publish/
 artifacts/
 .cache/
+.impeccable/
 
 # Local configuration and secrets
 .env

@@ -60,7 +60,18 @@ internal sealed class AgentRuntime : IAsyncDisposable
 
     public void AllowPairing(TimeSpan duration) => _pairingAllowedUntil = DateTimeOffset.UtcNow.Add(duration);
 
-    public AgentStatusDto GetStatus() => _controller.GetStatus(PeerOnline);
+    public AgentStatusDto GetStatus()
+    {
+        var status = _controller.GetStatus(PeerOnline);
+        var settings = _settingsStore.Current;
+        var remaining = BindingLeasePolicy.DaysRemaining(settings.BindingExpiresAt, DateTimeOffset.UtcNow);
+        return status with
+        {
+            BindingExpiresAt = settings.BindingExpiresAt,
+            BindingDaysRemaining = remaining,
+            AgentVersion = ProductDefaults.ProductVersion,
+        };
+    }
 
     private async Task HandleBinaryAsync(byte[] payload)
     {
@@ -98,10 +109,12 @@ internal sealed class AgentRuntime : IAsyncDisposable
             }
 
             EnsureBoundPhone(request.SenderDeviceId);
+            RenewBindingIfNeeded();
             return request.Method switch
             {
                 RpcMethods.StatusGet => Success(request.RequestId, GetStatus()),
                 RpcMethods.ConfigGet => Success(request.RequestId, await _controller.CreateConfigStore().LoadAsync(cancellationToken).ConfigureAwait(false)),
+                RpcMethods.ConfigSync => Success(request.RequestId, await _controller.SyncConfigAsync(cancellationToken).ConfigureAwait(false)),
                 RpcMethods.ConfigUpdate => Success(request.RequestId, await UpdateConfigAsync(request, cancellationToken).ConfigureAwait(false)),
                 RpcMethods.TaskStart => Success(request.RequestId, await StartTaskAsync(request, cancellationToken).ConfigureAwait(false)),
                 RpcMethods.TaskStop => Success(request.RequestId, await StopTaskAsync(request, cancellationToken).ConfigureAwait(false)),
@@ -136,13 +149,23 @@ internal sealed class AgentRuntime : IAsyncDisposable
             throw new InvalidDataException("手机设备 ID 无效。");
         }
         var settings = _settingsStore.Current;
+        if (!string.IsNullOrEmpty(settings.BoundPhoneDeviceId) && BindingLeasePolicy.IsExpired(settings.BindingExpiresAt, DateTimeOffset.UtcNow))
+        {
+            _settingsStore.Update(value =>
+            {
+                value.BoundPhoneDeviceId = null;
+                value.BoundAt = null;
+                value.BindingExpiresAt = null;
+            });
+            throw new InvalidOperationException("手机绑定已过期。请在电脑托盘中打开二维码并重新绑定。");
+        }
         if (!string.IsNullOrEmpty(settings.BoundPhoneDeviceId))
         {
             if (!string.Equals(settings.BoundPhoneDeviceId, pair.DeviceId, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException("此电脑已经绑定另一台手机。请在电脑托盘中执行重新绑定。");
             }
-            return new PairResponse(settings.PcDeviceId, Environment.MachineName, true);
+            return new PairResponse(settings.PcDeviceId, Environment.MachineName, true, settings.BindingExpiresAt ?? BindingLeasePolicy.CreateExpiry(DateTimeOffset.UtcNow));
         }
         if (DateTimeOffset.UtcNow > _pairingAllowedUntil)
         {
@@ -152,8 +175,15 @@ internal sealed class AgentRuntime : IAsyncDisposable
         {
             throw new InvalidOperationException("电脑端拒绝了绑定请求。");
         }
-        _settingsStore.Update(value => value.BoundPhoneDeviceId = pair.DeviceId);
-        return new PairResponse(settings.PcDeviceId, Environment.MachineName, true);
+        var now = DateTimeOffset.UtcNow;
+        var expiresAt = BindingLeasePolicy.CreateExpiry(now);
+        _settingsStore.Update(value =>
+        {
+            value.BoundPhoneDeviceId = pair.DeviceId;
+            value.BoundAt = now;
+            value.BindingExpiresAt = expiresAt;
+        });
+        return new PairResponse(settings.PcDeviceId, Environment.MachineName, true, expiresAt);
     }
 
     private async Task<RemoteConfigDto> UpdateConfigAsync(RpcRequestMessage request, CancellationToken cancellationToken)
@@ -187,11 +217,32 @@ internal sealed class AgentRuntime : IAsyncDisposable
 
     private void EnsureBoundPhone(string deviceId)
     {
-        var bound = _settingsStore.Current.BoundPhoneDeviceId;
+        var settings = _settingsStore.Current;
+        var bound = settings.BoundPhoneDeviceId;
         if (string.IsNullOrEmpty(bound) || !string.Equals(bound, deviceId, StringComparison.Ordinal))
         {
             throw new InvalidOperationException("手机尚未绑定此电脑。");
         }
+        if (BindingLeasePolicy.IsExpired(settings.BindingExpiresAt, DateTimeOffset.UtcNow))
+        {
+            _settingsStore.Update(value =>
+            {
+                value.BoundPhoneDeviceId = null;
+                value.BoundAt = null;
+                value.BindingExpiresAt = null;
+            });
+            throw new InvalidOperationException("手机绑定已过期。请在电脑端重新打开二维码绑定。");
+        }
+    }
+
+    private void RenewBindingIfNeeded()
+    {
+        var settings = _settingsStore.Current;
+        if (!BindingLeasePolicy.ShouldRenew(settings.BindingExpiresAt, DateTimeOffset.UtcNow))
+        {
+            return;
+        }
+        _settingsStore.Update(value => value.BindingExpiresAt = BindingLeasePolicy.CreateExpiry(DateTimeOffset.UtcNow));
     }
 
     private async Task SendResponseAsync(RpcResponseMessage response, CancellationToken cancellationToken)
@@ -275,4 +326,3 @@ internal sealed class AgentRuntime : IAsyncDisposable
         _lifetime.Dispose();
     }
 }
-

@@ -66,6 +66,11 @@ class App {
   }
 
   async start(): Promise<void> {
+    if (import.meta.env.DEV && new URLSearchParams(location.search).has('demo')) {
+      this.loadVisualDemo();
+      this.draw();
+      return;
+    }
     await this.importPairingFromFragment();
     this.pairing = await loadPairing();
     this.storageState = await persistentStorageState();
@@ -80,6 +85,22 @@ class App {
       else this.client?.close();
     });
     this.draw();
+  }
+
+  private loadVisualDemo(): void {
+    this.pairing = {deviceId: 'visualdemo123456', pcName: '旅行者的电脑'} as PairingRecord;
+    this.connection = 'online';
+    this.status = {
+      pcName: '旅行者的电脑', pcDeviceId: 'visualdemo', phonePeerOnline: true, windowsUnlocked: true,
+      betterGiConfigured: true, betterGiVersionSupported: true, betterGiVersion: '0.64.0', betterGiRunning: false,
+      gameRunning: false, state: 'idle', observedAt: new Date().toISOString(), bindingDaysRemaining: 176,
+      bindingExpiresAt: new Date(Date.now() + 176 * 86_400_000).toISOString(), agentVersion: appVersion,
+    };
+    this.config = {
+      name: '远程每日', revision: 'demo', completionAction: '关闭游戏和软件', readAt: new Date().toISOString(), fields: [],
+      tasks: ['领取邮件', '合成树脂', '自动秘境', '自动首领讨伐', '自动幽境危战', '自动地脉花', '领取每日奖励', '领取尘歌壶奖励', '朋友新增调度组']
+        .map((name, order) => ({id: `demo-${order}`, name, enabled: order < 4, isCustom: order === 8, order})),
+    };
   }
 
   private createClient(): void {
@@ -109,11 +130,11 @@ class App {
     if (!this.client || !this.pairing) return;
     try {
       if (!this.pairing.pcDeviceId) {
-        const paired = await this.client.call<{pcDeviceId: string; pcName: string; bound: boolean}>('pair.request', {
+        const paired = await this.client.call<{pcDeviceId: string; pcName: string; bound: boolean; bindingExpiresAt?: string}>('pair.request', {
           deviceId: this.pairing.deviceId,
           deviceLabel: mobileLabel(),
         }, 120_000);
-        this.pairing = {...this.pairing, pcDeviceId: paired.pcDeviceId, pcName: paired.pcName};
+        this.pairing = {...this.pairing, pcDeviceId: paired.pcDeviceId, pcName: paired.pcName, boundAt: new Date().toISOString(), bindingExpiresAt: paired.bindingExpiresAt};
         await savePairing(this.pairing);
       }
       await this.syncAll();
@@ -130,15 +151,31 @@ class App {
     this.error = undefined;
     this.draw();
     try {
+      let usedLegacySync = false;
+      const configRequest = showFeedback
+        ? this.client.call<RemoteConfig>('config.sync').catch(error => {
+            if (error instanceof RemoteRpcError && error.code === 'method_not_allowed') {
+              usedLegacySync = true;
+              return this.client!.call<RemoteConfig>('config.get');
+            }
+            throw error;
+          })
+        : this.client.call<RemoteConfig>('config.get');
       const [status, config, report] = await Promise.all([
         this.client.call<AgentStatus>('status.get'),
-        this.client.call<RemoteConfig>('config.get'),
+        configRequest,
         this.client.call<RunReport | undefined>('report.latest'),
       ]);
       this.status = status;
       this.config = normalizeConfig(config);
       this.report = report;
-      if (showFeedback) this.showNotice('已与电脑同步最新状态');
+      if (status.bindingExpiresAt && this.pairing && this.pairing.bindingExpiresAt !== status.bindingExpiresAt) {
+        this.pairing = {...this.pairing, bindingExpiresAt: status.bindingExpiresAt};
+        await savePairing(this.pairing);
+      }
+      if (showFeedback) this.showNotice(usedLegacySync
+        ? `已读取 ${config.tasks.length} 项任务；更新电脑端后可自动发现新增任务`
+        : `已同步电脑配置，共 ${config.tasks.length} 项任务`);
     } catch (error) {
       if (!showFeedback) throw error;
       this.setError(error);
@@ -381,10 +418,18 @@ class App {
     const ready = this.connection === 'online' && this.status.windowsUnlocked && this.status.betterGiVersionSupported && !this.status.betterGiRunning && this.status.state === 'idle';
     const running = this.status.state === 'running' || Boolean(this.progress);
     return html`
-      <section class="page-heading">
-        <h1>每日任务控制</h1>
-        <p>配置保留在电脑。手机只发送经过确认的固定操作。</p>
+      <section class="command-hero">
+        <div class="hero-image" role="img" aria-label="原神角色桑多涅、胡桃与纳西妲组合画面"></div>
+        <div class="hero-shade"></div>
+        <div class="hero-content">
+          <p class="hero-brand">BetterGI Remote</p>
+          <h1>${running ? '远征正在进行' : ready ? '今日委托已就绪' : '等待终端就绪'}</h1>
+          <p>${running ? `${this.progress?.currentTask ?? '正在准备任务'}` : ready ? '电脑状态正常，可以从这里启程。' : this.status.message ?? statusReason(this.status)}</p>
+          <div class="hero-signal"><span class="status-dot ${ready ? 'good' : running ? 'busy' : 'bad'}"></span>${this.connection === 'online' ? this.pairing.pcName ?? '已连接电脑' : '电脑连接中'}</div>
+        </div>
+        <small class="asset-credit">角色画面 © 米哈游 / HoYoverse</small>
       </section>
+      ${this.bindingReminder()}
       ${this.entryGuide()}
       <section class="status-panel" aria-label="电脑状态">
         <div class="status-primary">
@@ -417,6 +462,15 @@ class App {
           ? html`<md-filled-button class="danger-button" ?disabled=${this.loading || this.connection !== 'online'} @click=${() => void this.stopTask()}>${this.busyAction === 'stop' ? '正在发送…' : '停止任务'}</md-filled-button>`
           : html`<md-filled-button ?disabled=${!ready || !this.config || this.loading} @click=${() => void this.startTask()}>${this.busyAction === 'start' ? '正在启动…' : '确认并启动'}</md-filled-button>`}
       </section>`;
+  }
+
+  private bindingReminder(): TemplateResult | typeof nothing {
+    const remaining = this.status?.bindingDaysRemaining ?? daysUntil(this.pairing?.bindingExpiresAt);
+    if (remaining === undefined || remaining > 14) return nothing;
+    const expired = remaining <= 0;
+    return html`<section class="binding-reminder ${expired ? 'expired' : ''}" role=${expired ? 'alert' : 'status'}>
+      <div><strong>${expired ? '手机绑定已过期' : `绑定将在 ${remaining} 天后到期`}</strong><p>${expired ? '请在电脑托盘中选择“显示手机绑定二维码”并重新扫码。' : '保持电脑和手机正常连接会自动续期，无需手动操作。'}</p></div>
+    </section>`;
   }
 
   private entryGuide(): TemplateResult | typeof nothing {
@@ -518,6 +572,8 @@ class App {
         <div><span>手机设备代码</span><strong>${this.pairing?.deviceId.slice(0, 8) ?? '无'}</strong></div>
         <div><span>连接服务</span><strong>${this.pairing ? 'BetterGI Remote 正式服务' : '未连接'}</strong></div>
         <div><span>PWA 版本</span><strong>${appVersion}</strong></div>
+        <div><span>电脑端版本</span><strong>${this.status?.agentVersion ?? '等待同步'}</strong></div>
+        <div><span>绑定有效期</span><strong>${this.status?.bindingExpiresAt ? formatDateOnly(this.status.bindingExpiresAt) : this.pairing?.bindingExpiresAt ? formatDateOnly(this.pairing.bindingExpiresAt) : '连接后自动获取'}</strong></div>
         <div><span>绑定存储</span><strong>${storageStateText(this.storageState)}</strong></div>
         <div><span>日常打开方式</span><strong>${isWechatBrowser() ? '从微信收藏或文件传输助手打开' : isStandaloneMode() ? '已从手机主屏幕打开' : '建议添加到手机主屏幕'}</strong></div>
         <div><span>固定控制入口</span><strong>${isTemporaryOrigin() ? '当前为临时测试地址' : PRODUCTION_ORIGIN}</strong></div>
@@ -604,6 +660,15 @@ function formatDuration(seconds: number): string {
   const minutes = Math.floor(seconds / 60);
   const remaining = Math.round(seconds % 60);
   return `${minutes} 分 ${remaining} 秒`;
+}
+
+function formatDateOnly(value: string): string {
+  return new Intl.DateTimeFormat('zh-CN', {dateStyle: 'long'}).format(new Date(value));
+}
+
+function daysUntil(value?: string): number | undefined {
+  if (!value) return undefined;
+  return Math.max(0, Math.ceil((new Date(value).getTime() - Date.now()) / 86_400_000));
 }
 
 function mobileLabel(): string {

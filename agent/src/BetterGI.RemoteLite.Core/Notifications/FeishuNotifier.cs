@@ -63,7 +63,7 @@ public sealed class FeishuNotifier(HttpClient httpClient)
         return Convert.ToBase64String(hmac.ComputeHash([]));
     }
 
-    private static string FormatReport(RunReportDto report)
+    public static string FormatReport(RunReportDto report)
     {
         var builder = new StringBuilder();
         builder.AppendLine($"BetterGI 每日任务: {TranslateStatus(report.Status)}");
@@ -96,7 +96,7 @@ public sealed class FeishuNotifier(HttpClient httpClient)
         return builder.ToString().TrimEnd();
     }
 
-    private static string TranslateStatus(string status) => status switch
+    public static string TranslateStatus(string status) => status switch
     {
         "success" => "成功",
         "failed" => "失败",

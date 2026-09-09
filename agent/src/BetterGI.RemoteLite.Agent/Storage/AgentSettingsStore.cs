@@ -64,10 +64,23 @@ public sealed class AgentSettingsStore
                 return new AgentSettings();
             }
             var settings = JsonSerializer.Deserialize<AgentSettings>(File.ReadAllText(SettingsPath), RemoteJson.Options) ?? new AgentSettings();
+            var migrated = false;
             if (ShouldMigrateRelay(settings.RelayBaseUrl))
             {
                 settings.RelayBaseUrl = BetterGI.RemoteLite.Agent.ProductDefaults.RelayBaseUrl;
                 settings.BoundPhoneDeviceId = null;
+                settings.BoundAt = null;
+                settings.BindingExpiresAt = null;
+                migrated = true;
+            }
+            if (!string.IsNullOrWhiteSpace(settings.BoundPhoneDeviceId) && settings.BindingExpiresAt is null)
+            {
+                settings.BoundAt = DateTimeOffset.UtcNow;
+                settings.BindingExpiresAt = BetterGI.RemoteLite.Security.BindingLeasePolicy.CreateExpiry(DateTimeOffset.UtcNow);
+                migrated = true;
+            }
+            if (migrated)
+            {
                 PersistMigration(settings);
             }
             return settings;

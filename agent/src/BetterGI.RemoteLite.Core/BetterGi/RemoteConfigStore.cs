@@ -93,6 +93,85 @@ public sealed class RemoteConfigStore
         }
     }
 
+    public async Task<RemoteConfigDto> SynchronizeTasksFromSourceAsync(string? sourceConfigName, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(sourceConfigName))
+        {
+            return await LoadAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        var sourceName = ValidateConfigName(sourceConfigName);
+        var sourcePath = Path.Combine(OneDragonDirectory, sourceName + ".json");
+        EnsureContainedFile(sourcePath, OneDragonDirectory);
+        if (!File.Exists(sourcePath) || string.Equals(sourcePath, RemoteConfigPath, StringComparison.OrdinalIgnoreCase))
+        {
+            return await LoadAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        await _mutationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var remoteBytes = await ReadRequiredAsync(RemoteConfigPath, cancellationToken).ConfigureAwait(false);
+            var globalBytes = await ReadRequiredAsync(GlobalConfigPath, cancellationToken).ConfigureAwait(false);
+            var source = ParseObject(await File.ReadAllBytesAsync(sourcePath, cancellationToken).ConfigureAwait(false), sourcePath);
+            var remote = ParseObject(remoteBytes, RemoteConfigPath);
+            var sourceDefinitions = GetRootValue(source, "TaskDefinitions") as JsonObject
+                ?? throw new InvalidDataException("源一条龙配置缺少 TaskDefinitions。");
+            var remoteDefinitions = GetRootValue(remote, "TaskDefinitions") as JsonObject
+                ?? throw new InvalidDataException("远程一条龙配置缺少 TaskDefinitions。");
+            var sourceOrder = GetRootValue(source, "TaskOrder") as JsonArray
+                ?? throw new InvalidDataException("源一条龙配置缺少 TaskOrder。");
+            var remoteOrder = GetRootValue(remote, "TaskOrder") as JsonArray
+                ?? throw new InvalidDataException("远程一条龙配置缺少 TaskOrder。");
+            var sourceEnabled = GetRootValue(source, "TaskEnabledList") as JsonObject
+                ?? throw new InvalidDataException("源一条龙配置缺少 TaskEnabledList。");
+            var remoteEnabled = GetRootValue(remote, "TaskEnabledList") as JsonObject
+                ?? throw new InvalidDataException("远程一条龙配置缺少 TaskEnabledList。");
+
+            var knownIds = remoteDefinitions.Select(pair => pair.Key).ToHashSet(StringComparer.Ordinal);
+            var changed = false;
+            foreach (var node in sourceOrder)
+            {
+                var id = node?.GetValue<string>();
+                if (string.IsNullOrWhiteSpace(id) || knownIds.Contains(id) || sourceDefinitions[id] is null)
+                {
+                    continue;
+                }
+                remoteDefinitions[id] = sourceDefinitions[id]!.DeepClone();
+                remoteOrder.Add(JsonValue.Create(id));
+                remoteEnabled[id] = sourceEnabled[id]?.DeepClone() ?? JsonValue.Create(false);
+                knownIds.Add(id);
+                changed = true;
+            }
+            foreach (var pair in sourceDefinitions)
+            {
+                if (knownIds.Contains(pair.Key) || pair.Value is null)
+                {
+                    continue;
+                }
+                remoteDefinitions[pair.Key] = pair.Value.DeepClone();
+                remoteOrder.Add(JsonValue.Create(pair.Key));
+                remoteEnabled[pair.Key] = sourceEnabled[pair.Key]?.DeepClone() ?? JsonValue.Create(false);
+                knownIds.Add(pair.Key);
+                changed = true;
+            }
+
+            if (changed)
+            {
+                SetRootValue(remote, "Name", JsonValue.Create(_remoteConfigName));
+                SetRootValue(remote, "CompletionAction", JsonValue.Create(FixedCompletionAction));
+                var updated = Serialize(remote);
+                await BackupAndWriteAsync(RemoteConfigPath, updated, cancellationToken).ConfigureAwait(false);
+                remoteBytes = updated;
+            }
+            return BuildDto(remote, ParseObject(globalBytes, GlobalConfigPath), ComputeRevision(remoteBytes, globalBytes));
+        }
+        finally
+        {
+            _mutationLock.Release();
+        }
+    }
+
     public async Task<RemoteConfigDto> LoadAsync(CancellationToken cancellationToken = default)
     {
         var remoteBytes = await ReadRequiredAsync(RemoteConfigPath, cancellationToken).ConfigureAwait(false);

@@ -56,6 +56,34 @@ public sealed class RemoteConfigStoreTests : IDisposable
         await Assert.ThrowsAsync<InvalidDataException>(() => store.UpdateAsync(new ConfigUpdateRequest(fresh.Revision, inserted, new Dictionary<string, JsonElement>())));
     }
 
+    [Fact]
+    public async Task SynchronizesNewComputerTasksWithoutOverwritingRemoteChoices()
+    {
+        var executable = PrepareFiles();
+        var store = new RemoteConfigStore(executable);
+        await store.CreateRemoteCopyAsync("默认配置");
+        var initial = await store.LoadAsync();
+        var reversed = initial.Tasks.Reverse().Select((task, order) => task with { Enabled = false, Order = order }).ToArray();
+        await store.UpdateAsync(new ConfigUpdateRequest(initial.Revision, reversed, new Dictionary<string, JsonElement>()));
+
+        var sourcePath = Path.Combine(Path.GetDirectoryName(executable)!, "User", "OneDragon", "默认配置.json");
+        var source = await File.ReadAllTextAsync(sourcePath);
+        source = source
+            .Replace("\"b\": \"自动秘境\"", "\"b\": \"自动秘境\", \"c\": \"我的新调度组\"")
+            .Replace("[\"a\", \"b\"]", "[\"a\", \"b\", \"c\"]")
+            .Replace("\"b\": false", "\"b\": false, \"c\": true");
+        await File.WriteAllTextAsync(sourcePath, source);
+
+        var synchronized = await store.SynchronizeTasksFromSourceAsync("默认配置");
+
+        Assert.Equal(3, synchronized.Tasks.Count);
+        Assert.Equal(["自动秘境", "领取邮件", "我的新调度组"], synchronized.Tasks.Select(task => task.Name));
+        Assert.False(synchronized.Tasks[0].Enabled);
+        Assert.False(synchronized.Tasks[1].Enabled);
+        Assert.True(synchronized.Tasks[2].Enabled);
+        Assert.True(synchronized.Tasks[2].IsCustom);
+    }
+
     private string PrepareFiles()
     {
         var betterGi = Path.Combine(_root, "BetterGI");

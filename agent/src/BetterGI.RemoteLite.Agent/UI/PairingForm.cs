@@ -8,14 +8,15 @@ internal sealed class PairingForm : Form
     private readonly Bitmap _bitmap;
     private readonly System.Windows.Forms.Timer? _boundTimer;
 
-    public PairingForm(string relayBaseUrl, ReadOnlySpan<byte> secret, bool alreadyBound, Func<bool>? isBound = null)
+    public PairingForm(string relayBaseUrl, ReadOnlySpan<byte> secret, bool alreadyBound, Func<bool>? isBound = null, DateTimeOffset? bindingExpiresAt = null)
     {
         Text = alreadyBound ? "手机连接二维码" : "连接手机";
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(460, 590);
+        ClientSize = new Size(500, 680);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;
+        BackColor = Color.FromArgb(13, 29, 49);
 
         var url = relayBaseUrl.TrimEnd('/') + "/#pair=" + Base64Url.Encode(secret);
         using var generator = new QRCodeGenerator();
@@ -55,15 +56,34 @@ internal sealed class PairingForm : Form
             Text = "二维码有效 5 分钟",
             Dock = DockStyle.Top,
             Height = 30,
-            ForeColor = SystemColors.GrayText,
+            ForeColor = Color.FromArgb(214, 181, 106),
             TextAlign = ContentAlignment.MiddleCenter,
         };
+        if (alreadyBound && bindingExpiresAt is { } expiry)
+        {
+            hint.Text = $"当前绑定有效至 {expiry.ToLocalTime():yyyy-MM-dd}，正常连接会自动续期";
+        }
         var link = new TextBox
         {
-            Text = url,
+            Text = relayBaseUrl.TrimEnd('/'),
             ReadOnly = true,
             Dock = DockStyle.Top,
             Margin = new Padding(20),
+            TextAlign = HorizontalAlignment.Center,
+        };
+        var copy = new Button
+        {
+            Text = "复制日常控制网址",
+            Dock = DockStyle.Top,
+            Height = 42,
+            BackColor = Color.FromArgb(214, 181, 106),
+            ForeColor = Color.FromArgb(35, 27, 13),
+            FlatStyle = FlatStyle.Flat,
+        };
+        copy.Click += (_, _) =>
+        {
+            Clipboard.SetText(relayBaseUrl.TrimEnd('/'));
+            copy.Text = "已复制，可以发到文件传输助手";
         };
         var done = new Button
         {
@@ -73,13 +93,22 @@ internal sealed class PairingForm : Form
             Visible = alreadyBound,
         };
         done.Click += (_, _) => Close();
-        link.Visible = false;
         Controls.Add(done);
+        Controls.Add(copy);
         Controls.Add(link);
         Controls.Add(hint);
         Controls.Add(notice);
         Controls.Add(picture);
         Controls.Add(title);
+
+        title.ForeColor = Color.FromArgb(248, 239, 215);
+        title.BackColor = Color.Transparent;
+        notice.ForeColor = Color.FromArgb(205, 216, 225);
+        notice.BackColor = Color.Transparent;
+        picture.BackColor = Color.FromArgb(245, 239, 225);
+        done.BackColor = Color.FromArgb(214, 181, 106);
+        done.ForeColor = Color.FromArgb(35, 27, 13);
+        done.FlatStyle = FlatStyle.Flat;
 
         if (!alreadyBound && isBound is not null)
         {

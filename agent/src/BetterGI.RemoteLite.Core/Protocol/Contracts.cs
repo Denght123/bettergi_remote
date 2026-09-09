@@ -15,6 +15,7 @@ public static class RpcMethods
     public const string PairRequest = "pair.request";
     public const string StatusGet = "status.get";
     public const string ConfigGet = "config.get";
+    public const string ConfigSync = "config.sync";
     public const string ConfigUpdate = "config.update";
     public const string TaskStart = "task.start";
     public const string TaskStop = "task.stop";
@@ -25,6 +26,7 @@ public static class RpcMethods
         PairRequest,
         StatusGet,
         ConfigGet,
+        ConfigSync,
         ConfigUpdate,
         TaskStart,
         TaskStop,
@@ -68,7 +70,7 @@ public sealed record RpcError(string Code, string Message, bool Retryable = fals
 
 public sealed record PairRequest(string DeviceId, string DeviceLabel);
 
-public sealed record PairResponse(string PcDeviceId, string PcName, bool Bound);
+public sealed record PairResponse(string PcDeviceId, string PcName, bool Bound, DateTimeOffset BindingExpiresAt);
 
 public sealed record ConfigUpdateRequest(
     string BaseRevision,
@@ -97,7 +99,10 @@ public sealed record AgentStatusDto(
     string? ActiveRunId,
     string? ActiveTask,
     DateTimeOffset ObservedAt,
-    string? Message = null);
+    string? Message = null,
+    DateTimeOffset? BindingExpiresAt = null,
+    int? BindingDaysRemaining = null,
+    string AgentVersion = "0.3.0");
 
 public sealed record TaskItemDto(string Id, string Name, bool Enabled, bool IsCustom, int Order);
 
@@ -153,4 +158,3 @@ public sealed record RunReportDto(
     IReadOnlyList<string> Errors,
     IReadOnlyList<string> LogExcerpt,
     string ParserVersion = "0.64.x-v1");
-

@@ -7,11 +7,15 @@
     <AssemblyName>BetterGI.RemoteLite.Agent</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <PublishTrimmed>false</PublishTrimmed>
-    <Version>0.2.1</Version>
+    <Version>0.3.0</Version>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\BetterGI.RemoteLite.Core\BetterGI.RemoteLite.Core.csproj" />
     <PackageReference Include="QRCoder" Version="1.8.0" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="..\..\..\web\public\assets\genshin-character-ensemble.webp" Link="assets\genshin-character-ensemble.webp" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

@@ -1,5 +1,5 @@
 #define MyAppName "BetterGI Remote"
-#define MyAppVersion "0.2.1"
+#define MyAppVersion "0.3.0"
 #define MyAppPublisher "BetterGI Remote contributors"
 #define MyAppExeName "BetterGI.RemoteLite.Agent.exe"
 
@@ -21,7 +21,6 @@ ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=admin
 UninstallDisplayIcon={app}\{#MyAppExeName}
 CloseApplications=yes
-AppMutex=BetterGIRemoteLiteAgent
 
 [Files]
 Source: "..\..\artifacts\agent-win-x64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -33,7 +32,7 @@ Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 
 [Run]
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\tools\install-autostart.ps1"" -Executable ""{app}\{#MyAppExeName}"""; Flags: runhidden waituntilterminated
-Filename: "{app}\{#MyAppExeName}"; Description: "启动 {#MyAppName}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "启动 {#MyAppName}"; Flags: nowait postinstall runasoriginaluser
 
 [UninstallRun]
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\tools\remove-autostart.ps1"""; Flags: runhidden waituntilterminated; RunOnceId: "RemoveScheduledTask"

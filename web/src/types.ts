@@ -12,6 +12,8 @@ export interface PairingRecord {
   pcToPhoneKey: CryptoKey;
   pcDeviceId?: string;
   pcName?: string;
+  boundAt?: string;
+  bindingExpiresAt?: string;
 }
 
 export interface EncryptedEnvelope {
@@ -60,6 +62,9 @@ export interface AgentStatus {
   activeTask?: string;
   observedAt: string;
   message?: string;
+  bindingExpiresAt?: string;
+  bindingDaysRemaining?: number;
+  agentVersion: string;
 }
 
 export interface TaskItem {
@@ -123,4 +128,3 @@ export interface RunReport {
   logExcerpt: string[];
   parserVersion: string;
 }
-

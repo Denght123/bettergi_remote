@@ -1,0 +1,14 @@
+{
+  "secret": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+  "channelId": "o2Z8-Eem-Gsdu2_B2hyA0Q",
+  "relayToken": "gdG0N_ocd1-XE6TmCXCnZlU560HnFpYdHSqR-oUfCvo",
+  "phoneToPcKey": "V1Sq6hFG3oIlqM76Vq_hFTT3kMrhvdwbPOMiQM3Ut00",
+  "pcToPhoneKey": "ckIjQS5nUbwSDUPqVgEf9XZ6PtPqP-me4wcqgq0oIjU",
+  "requestId": "vector-request",
+  "issuedAtUnixSeconds": 1788364800,
+  "expiresAtUnixSeconds": 1788364860,
+  "nonce": "AAECAwQFBgcICQoL",
+  "plaintext": "eyJ0eXBlIjoicnBjLnJlc3BvbnNlIiwicmVxdWVzdElkIjoidmVjdG9yLXJlcXVlc3QiLCJvayI6dHJ1ZSwicmVzdWx0Ijp7InZhbHVlIjoi6Leo5bmz5Y-wIn19",
+  "ciphertext": "Hg9hxB36m3FjDPGFRkiGpgDGIhFSGhJ629rjytnLwDFcmWjAb5WJWHaoOHJHQ6A9aF_eoj5U9j_x7pOPqkIuWpZ3TjcE_9A8CQmXnLSon7EbValje6-A0LbHJquOzlpzcTdU6OV-SqBMNODwdw"
+}
+

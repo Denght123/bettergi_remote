@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>BetterGI.RemoteLite</RootNamespace>
+    <AssemblyName>BetterGI.RemoteLite.Core</AssemblyName>
+  </PropertyGroup>
+</Project>
+

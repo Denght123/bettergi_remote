@@ -1,0 +1,9 @@
+.git
+**/bin
+**/obj
+**/node_modules
+**/dist
+**/*.user
+artifacts
+tmp
+

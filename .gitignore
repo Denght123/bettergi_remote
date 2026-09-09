@@ -1,0 +1,31 @@
+# Build output
+**/bin/
+**/obj/
+**/dist/
+**/coverage/
+**/.vite/
+**/node_modules/
+relay/relay
+relay/relay.exe
+publish/
+artifacts/
+.cache/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.pfx
+*.p12
+*.key
+*.keystore
+agent-settings.json
+
+# IDE and OS files
+.idea/
+.vs/
+.vscode/
+*.user
+*.suo
+.DS_Store
+Thumbs.db

@@ -1,0 +1,12 @@
+{
+    auto_https on
+}
+
+{$DOMAIN} {
+    encode zstd gzip
+    reverse_proxy relay:8080
+    log {
+        output discard
+    }
+}
+

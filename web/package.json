@@ -1,0 +1,27 @@
+{
+  "name": "bettergi-remote-lite-web",
+  "version": "0.2.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit --pretty false",
+    "test": "vitest run",
+    "verify": "npm run typecheck && npm test && npm run build"
+  },
+  "dependencies": {
+    "@material/web": "2.3.0",
+    "lit": "3.3.1",
+    "sortablejs": "1.15.6"
+  },
+  "devDependencies": {
+    "@types/sortablejs": "1.15.8",
+    "typescript": "5.9.2",
+    "vite": "7.3.6",
+    "vitest": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

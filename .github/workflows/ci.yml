@@ -1,0 +1,38 @@
+name: verify
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  web-relay:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.x"
+          cache-dependency-path: relay/go.sum
+      - run: npm ci
+        working-directory: web
+      - run: npm run verify
+        working-directory: web
+      - run: go test ./...
+        working-directory: relay
+
+  windows-agent:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet test BetterGI.RemoteLite.sln --configuration Release
+        working-directory: agent
+      - run: dotnet build BetterGI.RemoteLite.sln --configuration Release --no-restore
+        working-directory: agent

@@ -1,0 +1,31 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BetterGI.RemoteLite.Core", "src\BetterGI.RemoteLite.Core\BetterGI.RemoteLite.Core.csproj", "{49268ED2-A1F8-4DF5-B25A-EF2E05D34568}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BetterGI.RemoteLite.Agent", "src\BetterGI.RemoteLite.Agent\BetterGI.RemoteLite.Agent.csproj", "{49BCE5AF-33A9-4632-A127-38E03EE017F6}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BetterGI.RemoteLite.Core.Tests", "tests\BetterGI.RemoteLite.Core.Tests\BetterGI.RemoteLite.Core.Tests.csproj", "{F914173D-3A1B-428A-900F-0B9BED88D046}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{49268ED2-A1F8-4DF5-B25A-EF2E05D34568}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{49268ED2-A1F8-4DF5-B25A-EF2E05D34568}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{49268ED2-A1F8-4DF5-B25A-EF2E05D34568}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{49268ED2-A1F8-4DF5-B25A-EF2E05D34568}.Release|Any CPU.Build.0 = Release|Any CPU
+		{49BCE5AF-33A9-4632-A127-38E03EE017F6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{49BCE5AF-33A9-4632-A127-38E03EE017F6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{49BCE5AF-33A9-4632-A127-38E03EE017F6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{49BCE5AF-33A9-4632-A127-38E03EE017F6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F914173D-3A1B-428A-900F-0B9BED88D046}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F914173D-3A1B-428A-900F-0B9BED88D046}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F914173D-3A1B-428A-900F-0B9BED88D046}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F914173D-3A1B-428A-900F-0B9BED88D046}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
+

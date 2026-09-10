@@ -95,6 +95,7 @@ class App {
       betterGiConfigured: true, betterGiVersionSupported: true, betterGiVersion: '0.64.0', betterGiRunning: false,
       gameRunning: false, state: 'idle', observedAt: new Date().toISOString(), bindingDaysRemaining: 176,
       bindingExpiresAt: new Date(Date.now() + 176 * 86_400_000).toISOString(), agentVersion: appVersion,
+      betterGiCompatibilityVerified: true, betterGiLatestVersion: '0.64.0', betterGiUpdateAvailable: false,
     };
     this.config = {
       name: '远程每日', revision: 'demo', completionAction: '关闭游戏和软件', readAt: new Date().toISOString(), fields: [],
@@ -429,6 +430,7 @@ class App {
         <small class="asset-credit">角色画面 © 米哈游 / HoYoverse</small>
       </section>
       ${this.bindingReminder()}
+      ${this.status.betterGiUpdateAvailable ? html`<section class="binding-reminder"><strong>BetterGI 有新版本 ${this.status.betterGiLatestVersion}</strong><p>电脑当前为 ${this.status.betterGiVersion ?? '未知版本'}。更新 BetterGI 后，也请同步检查 BetterGI Remote 更新。</p></section>` : nothing}
       ${this.entryGuide()}
       <section class="status-panel" aria-label="电脑状态">
         <div class="status-primary">
@@ -559,7 +561,8 @@ class App {
         <strong>${formatDuration(this.report.durationSeconds)}</strong>
       </section>
       <section class="report-section"><h2>任务</h2><div class="result-grid">${this.report.tasks.map(task => html`<div class="result-item"><span>${task.name}</span><strong>${statusText(task.state)}</strong>${task.message ? html`<small>${task.message}</small>` : nothing}</div>`)}</div></section>
-      <section class="report-section"><h2>识别奖励</h2>${Object.keys(this.report.rewards).length ? html`<div class="reward-grid">${Object.entries(this.report.rewards).map(([name, count]) => html`<div><span>${name}</span><strong>x${count}</strong></div>`)}</div>` : html`<p class="empty-copy">本次没有可汇总的奖励识别结果。</p>`}</section>
+      <section class="report-section"><h2>本次任务获得</h2>${Object.keys(this.report.rewards).length ? html`<div class="reward-grid">${Object.entries(this.report.rewards).map(([name, count]) => html`<div><span>${name}</span><strong>x${count}</strong></div>`)}</div>` : html`<p class="empty-copy">本次没有识别到可汇总的任务道具。</p>`}${this.report.rewardRecognitionStatus ? html`<p class="reward-note">${this.report.rewardRecognitionStatus}</p>` : nothing}</section>
+      <section class="report-section"><h2>今日累计获得</h2><p class="report-date">${this.report.dailyRewardDate ?? '电脑本地日期'}</p>${Object.keys(this.report.dailyRewards ?? {}).length ? html`<div class="reward-grid">${Object.entries(this.report.dailyRewards ?? {}).map(([name, count]) => html`<div><span>${name}</span><strong>x${count}</strong></div>`)}</div>` : html`<p class="empty-copy">今天暂时没有可累计的奖励识别结果。</p>`}</section>
       ${this.report.dailyRewardStatus ? html`<section class="report-section"><h2>每日奖励</h2><p>${this.report.dailyRewardStatus}</p></section>` : nothing}
       ${this.report.errors.length ? html`<section class="report-section error-list"><h2>错误</h2>${this.report.errors.map(error => html`<p>${error}</p>`)}</section>` : nothing}`;
   }
@@ -573,6 +576,8 @@ class App {
         <div><span>连接服务</span><strong>${this.pairing ? 'BetterGI Remote 正式服务' : '未连接'}</strong></div>
         <div><span>PWA 版本</span><strong>${appVersion}</strong></div>
         <div><span>电脑端版本</span><strong>${this.status?.agentVersion ?? '等待同步'}</strong></div>
+        <div><span>BetterGI 兼容性</span><strong>${this.status ? this.status.betterGiCompatibilityVerified ? '已验证' : this.status.betterGiVersionSupported ? '结构兼容，待实机验证' : '需要更新 BetterGI Remote' : '等待同步'}</strong></div>
+        <div><span>BetterGI 官方最新版</span><strong>${this.status?.betterGiLatestVersion ?? '等待电脑检查'}</strong></div>
         <div><span>绑定有效期</span><strong>${this.status?.bindingExpiresAt ? formatDateOnly(this.status.bindingExpiresAt) : this.pairing?.bindingExpiresAt ? formatDateOnly(this.pairing.bindingExpiresAt) : '连接后自动获取'}</strong></div>
         <div><span>绑定存储</span><strong>${storageStateText(this.storageState)}</strong></div>
         <div><span>日常打开方式</span><strong>${isWechatBrowser() ? '从微信收藏或文件传输助手打开' : isStandaloneMode() ? '已从手机主屏幕打开' : '建议添加到手机主屏幕'}</strong></div>

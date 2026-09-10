@@ -18,6 +18,10 @@ public sealed class AgentSettings
     public string? ProtectedQqSmtpAuthorizationCode { get; set; }
     public string? ProtectedNotificationRecipient { get; set; }
     public DateTimeOffset? LastUpdateCheckAt { get; set; }
+    public DateTimeOffset? LastBetterGiUpdateCheckAt { get; set; }
+    public string? LatestKnownBetterGiVersion { get; set; }
+    public string? LatestKnownBetterGiReleaseUrl { get; set; }
+    public string? LastNotifiedBetterGiVersion { get; set; }
 
     public bool IsConfigured => File.Exists(BetterGiExecutablePath) && Uri.TryCreate(RelayBaseUrl, UriKind.Absolute, out _);
 }

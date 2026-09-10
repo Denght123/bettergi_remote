@@ -75,11 +75,23 @@ public sealed class FeishuNotifier(HttpClient httpClient)
         }
         if (report.Rewards.Count > 0)
         {
-            builder.AppendLine("识别奖励:");
+            builder.AppendLine("本次任务获得:");
             foreach (var reward in report.Rewards.OrderBy(item => item.Key, StringComparer.CurrentCulture))
             {
                 builder.AppendLine($"- {reward.Key} x{reward.Value}");
             }
+        }
+        if (report.DailyRewards is { Count: > 0 })
+        {
+            builder.AppendLine($"今日累计获得 ({report.DailyRewardDate ?? "本地日期"}):");
+            foreach (var reward in report.DailyRewards.OrderBy(item => item.Key, StringComparer.CurrentCulture))
+            {
+                builder.AppendLine($"- {reward.Key} x{reward.Value}");
+            }
+        }
+        if (!string.IsNullOrWhiteSpace(report.RewardRecognitionStatus))
+        {
+            builder.AppendLine("奖励识别: " + report.RewardRecognitionStatus);
         }
         if (!string.IsNullOrWhiteSpace(report.DailyRewardStatus))
         {

@@ -203,6 +203,30 @@ public sealed class RemoteConfigStore
         }
     }
 
+    public async Task EnsureRewardRecognitionEnabledAsync(CancellationToken cancellationToken = default)
+    {
+        await _mutationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var remoteBytes = await ReadRequiredAsync(RemoteConfigPath, cancellationToken).ConfigureAwait(false);
+            var globalBytes = await ReadRequiredAsync(GlobalConfigPath, cancellationToken).ConfigureAwait(false);
+            var remote = ParseObject(remoteBytes, RemoteConfigPath);
+            var global = ParseObject(globalBytes, GlobalConfigPath);
+            SetValue(remote, "AutoBossRewardRecognitionEnabled", JsonValue.Create(true));
+            SetValue(global, "autoDomainConfig.rewardRecognitionEnabled", JsonValue.Create(true));
+            var updatedRemote = Serialize(remote);
+            var updatedGlobal = Serialize(global);
+            if (!remoteBytes.AsSpan().SequenceEqual(updatedRemote) || !globalBytes.AsSpan().SequenceEqual(updatedGlobal))
+            {
+                await WritePairWithRollbackAsync(updatedRemote, updatedGlobal, remoteBytes, globalBytes, cancellationToken).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            _mutationLock.Release();
+        }
+    }
+
     public async Task<RemoteConfigDto> UpdateAsync(ConfigUpdateRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);

@@ -70,4 +70,37 @@ public sealed class BetterGiLogParserTests
         Assert.Equal("success", report.Tasks[0].State);
         Assert.Empty(report.Errors);
     }
+
+    [Fact]
+    public void ParsesQuotedRealRewardLogAndCurrentDailyRewardText()
+    {
+        var start = new DateTimeOffset(2026, 9, 10, 14, 0, 0, TimeSpan.FromHours(8));
+        var parser = new BetterGiLogParser("real-reward", start, ["自动秘境", "领取每日奖励"]);
+
+        parser.AcceptLine("自动秘境：开始奖励识别", start.AddMinutes(1));
+        parser.AcceptLine("自动秘境：本轮奖励识别结果 \"好感经验 x60, 摩拉 x10575, 天授之馨 x1\"", start.AddMinutes(2));
+        parser.AcceptLine("检查每日奖励结果：\"今日奖励已领取\"", start.AddMinutes(3));
+        parser.AcceptLine("一条龙和配置组任务结束", start.AddMinutes(4));
+
+        var report = parser.Finish(parser.TerminalStatus!, start.AddMinutes(4));
+        Assert.Equal(60, report.Rewards["好感经验"]);
+        Assert.Equal(10575, report.Rewards["摩拉"]);
+        Assert.Equal(1, report.Rewards["天授之馨"]);
+        Assert.Equal("已领取", report.DailyRewardStatus);
+        Assert.Equal("BetterGI 奖励识别完成", report.RewardRecognitionStatus);
+    }
+
+    [Fact]
+    public void ReportsPartialRewardRecognition()
+    {
+        var start = DateTimeOffset.UtcNow;
+        var parser = new BetterGiLogParser("partial-reward", start, ["自动秘境"]);
+
+        parser.AcceptLine("自动秘境：奖励识别失败，已跳过本轮奖励汇总", start.AddMinutes(1));
+        parser.AcceptLine("自动秘境：本轮奖励识别结果 \"摩拉 x3525\"", start.AddMinutes(2));
+
+        var report = parser.Finish("success", start.AddMinutes(3));
+        Assert.Equal(3525, report.Rewards["摩拉"]);
+        Assert.Contains("可能不完整", report.RewardRecognitionStatus);
+    }
 }

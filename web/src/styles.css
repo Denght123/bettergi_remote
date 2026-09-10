@@ -144,6 +144,8 @@ md-linear-progress { width: 100%; --md-linear-progress-active-indicator-color: v
 .result-item span, .result-item small { color: var(--text-muted); }
 .reward-grid { margin-top: 16px; display: grid; gap: 1px; background: var(--line); border-radius: 12px; overflow: hidden; }
 .reward-grid > div { display: flex; justify-content: space-between; gap: 16px; padding: 13px 14px; background: #f3f3eb; }
+.reward-note, .report-date { margin: 12px 0 0; color: var(--text-muted); font-size: 13px; line-height: 1.5; }
+.report-date { margin-top: 5px; }
 .empty-copy { color: var(--text-muted); }
 .error-list p { padding: 12px; background: #f7e3df; color: #743b37; border-radius: 10px; }
 .settings-list { overflow: hidden; border-radius: 16px; box-shadow: inset 0 3px var(--aqua), var(--shadow); }

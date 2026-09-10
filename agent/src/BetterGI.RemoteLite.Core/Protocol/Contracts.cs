@@ -102,7 +102,10 @@ public sealed record AgentStatusDto(
     string? Message = null,
     DateTimeOffset? BindingExpiresAt = null,
     int? BindingDaysRemaining = null,
-    string AgentVersion = "0.3.2");
+    string AgentVersion = "0.3.3",
+    bool BetterGiCompatibilityVerified = false,
+    string? BetterGiLatestVersion = null,
+    bool BetterGiUpdateAvailable = false);
 
 public sealed record TaskItemDto(string Id, string Name, bool Enabled, bool IsCustom, int Order);
 
@@ -157,4 +160,7 @@ public sealed record RunReportDto(
     string? DailyRewardStatus,
     IReadOnlyList<string> Errors,
     IReadOnlyList<string> LogExcerpt,
-    string ParserVersion = "0.64.x-v1");
+    string ParserVersion = "adaptive-v2",
+    IReadOnlyDictionary<string, int>? DailyRewards = null,
+    string? DailyRewardDate = null,
+    string? RewardRecognitionStatus = null);

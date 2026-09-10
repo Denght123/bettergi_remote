@@ -35,6 +35,8 @@ internal sealed class BetterGiController
     {
         var settings = _settingsStore.Current;
         var version = BetterGiVersionPolicy.Check(settings.BetterGiExecutablePath);
+        var latestVersion = Version.TryParse(settings.LatestKnownBetterGiVersion, out var latest) ? latest : null;
+        var installedVersion = Version.TryParse(version.Version, out var installed) ? installed : null;
         ActiveRun? active;
         lock (_sync)
         {
@@ -54,7 +56,10 @@ internal sealed class BetterGiController
             active?.RunId,
             active?.CurrentTask,
             DateTimeOffset.UtcNow,
-            version.Message);
+            version.Message,
+            BetterGiCompatibilityVerified: version.Verified,
+            BetterGiLatestVersion: latestVersion?.ToString(),
+            BetterGiUpdateAvailable: latestVersion is not null && installedVersion is not null && latestVersion > installedVersion);
     }
 
     public bool CanMutate(out string? reason)
@@ -225,6 +230,13 @@ internal sealed class BetterGiController
 
     Completed:
         var report = active.Parser.Finish(finalStatus, DateTimeOffset.UtcNow, finalError);
+        var localDate = DateOnly.FromDateTime(report.FinishedAt.ToLocalTime().DateTime);
+        var dailyRewards = await _reportStore.AggregateRewardsAsync(localDate, report).ConfigureAwait(false);
+        report = report with
+        {
+            DailyRewards = dailyRewards,
+            DailyRewardDate = localDate.ToString("yyyy-MM-dd"),
+        };
         await _reportStore.SaveAsync(report).ConfigureAwait(false);
         await SendNotificationsAsync(settings, report).ConfigureAwait(false);
         lock (_sync)

@@ -65,6 +65,9 @@ export interface AgentStatus {
   bindingExpiresAt?: string;
   bindingDaysRemaining?: number;
   agentVersion: string;
+  betterGiCompatibilityVerified: boolean;
+  betterGiLatestVersion?: string;
+  betterGiUpdateAvailable: boolean;
 }
 
 export interface TaskItem {
@@ -127,4 +130,7 @@ export interface RunReport {
   errors: string[];
   logExcerpt: string[];
   parserVersion: string;
+  dailyRewards?: Record<string, number>;
+  dailyRewardDate?: string;
+  rewardRecognitionStatus?: string;
 }

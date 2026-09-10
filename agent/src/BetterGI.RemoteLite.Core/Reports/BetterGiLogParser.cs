@@ -14,6 +14,9 @@ public sealed partial class BetterGiLogParser
     private int _currentTaskIndex = -1;
     private string? _dailyRewardStatus;
     private string? _terminalStatus;
+    private int _rewardRecognitionSuccesses;
+    private int _rewardRecognitionFailures;
+    private bool _rewardRecognitionAttempted;
 
     public BetterGiLogParser(string runId, DateTimeOffset startedAt, IReadOnlyList<string> enabledTasks)
     {
@@ -46,30 +49,50 @@ public sealed partial class BetterGiLogParser
             changed |= StartNamedTask(group.Groups[1].Value.Trim());
         }
 
-        if (line.Contains("检查每日奖励：已领取", StringComparison.Ordinal))
+        if (line.Contains("检查每日奖励：已领取", StringComparison.Ordinal) ||
+            line.Contains("今日奖励已领取", StringComparison.Ordinal))
         {
             _dailyRewardStatus = "已领取";
             changed = true;
         }
-        else if (line.Contains("检查到每日奖励未领取", StringComparison.Ordinal))
+        else if (line.Contains("检查到每日奖励未领取", StringComparison.Ordinal) ||
+                 line.Contains("今日奖励未领取", StringComparison.Ordinal))
         {
             _dailyRewardStatus = "未领取";
             MarkTaskWarning("领取每日奖励", "BetterGI 检查到每日奖励未领取");
             changed = true;
         }
 
+        if (line.Contains("开始奖励识别", StringComparison.Ordinal))
+        {
+            _rewardRecognitionAttempted = true;
+        }
+        if (line.Contains("奖励识别失败", StringComparison.Ordinal) ||
+            line.Contains("奖励识别结果为空", StringComparison.Ordinal) ||
+            line.Contains("已跳过本轮奖励识别", StringComparison.Ordinal))
+        {
+            _rewardRecognitionAttempted = true;
+            _rewardRecognitionFailures++;
+            changed = true;
+        }
+
         var reward = RewardRegex().Match(line);
         if (reward.Success)
         {
+            var parsedAny = false;
             foreach (Match item in RewardItemRegex().Matches(reward.Groups[1].Value))
             {
-                var name = item.Groups[1].Value.Trim(' ', ',', '，');
+                var name = item.Groups[1].Value.Trim(' ', ',', '，', '"', '“', '”');
                 if (name.Length == 0 || !int.TryParse(item.Groups[2].Value, out var count))
                 {
                     continue;
                 }
                 _rewards[name] = _rewards.GetValueOrDefault(name) + count;
+                parsedAny = true;
             }
+            _rewardRecognitionAttempted = true;
+            if (parsedAny) _rewardRecognitionSuccesses++;
+            else _rewardRecognitionFailures++;
             changed = true;
         }
 
@@ -134,7 +157,16 @@ public sealed partial class BetterGiLogParser
             new Dictionary<string, int>(_rewards, StringComparer.CurrentCulture),
             _dailyRewardStatus,
             _errors.ToArray(),
-            _excerpt.ToArray());
+            _excerpt.ToArray(),
+            RewardRecognitionStatus: RewardRecognitionStatus());
+    }
+
+    private string? RewardRecognitionStatus()
+    {
+        if (!_rewardRecognitionAttempted) return null;
+        if (_rewardRecognitionSuccesses > 0 && _rewardRecognitionFailures == 0) return "BetterGI 奖励识别完成";
+        if (_rewardRecognitionSuccesses > 0) return "部分轮次识别失败，今日数量可能不完整";
+        return "BetterGI 未能识别奖励，请检查画面分辨率和奖励识别设置";
     }
 
     private bool StartTask(int index)
@@ -238,4 +270,3 @@ public sealed partial class BetterGiLogParser
 }
 
 public sealed record LogParseUpdate(RunProgressDto? Progress, bool IsTerminal);
-

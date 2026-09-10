@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using BetterGI.RemoteLite.Agent.Runtime;
 using BetterGI.RemoteLite.Agent.Storage;
 using BetterGI.RemoteLite.Agent.UI;
+using BetterGI.RemoteLite.BetterGi;
 using BetterGI.RemoteLite.Protocol;
 using BetterGI.RemoteLite.Security;
 
@@ -15,6 +16,7 @@ internal sealed class AgentApplicationContext : ApplicationContext
     private readonly NotifyIcon _tray;
     private AgentRuntime? _runtime;
     private readonly UpdateService _updates = new();
+    private readonly BetterGiReleaseService _betterGiUpdates = new();
     private bool _exiting;
 
     public AgentApplicationContext(bool forceSetup = false)
@@ -31,6 +33,7 @@ internal sealed class AgentApplicationContext : ApplicationContext
         {
             if (await CheckForUpdatesAsync(manual: true)) ExitAgent();
         });
+        menu.Items.Add("检查 BetterGI 更新", null, async (_, _) => await CheckForBetterGiUpdatesAsync(manual: true));
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("退出", null, (_, _) => ExitAgent());
 
@@ -44,6 +47,7 @@ internal sealed class AgentApplicationContext : ApplicationContext
         _tray.DoubleClick += (_, _) => OpenSettings();
         StartRuntime();
         ScheduleAutomaticUpdateCheck();
+        ScheduleBetterGiUpdateCheck();
         ShowStartupReminder();
 
         if (forceSetup || !_settingsStore.Current.IsConfigured || string.IsNullOrEmpty(_settingsStore.Current.BoundPhoneDeviceId))
@@ -77,6 +81,7 @@ internal sealed class AgentApplicationContext : ApplicationContext
             showStatus: ShowStatus,
             openControlEntry: OpenControlEntry,
             checkForUpdates: () => CheckForUpdatesAsync(manual: true),
+            checkForBetterGiUpdates: () => CheckForBetterGiUpdatesAsync(manual: true),
             exitApplication: ExitAgent);
         if (form.ShowDialog() == DialogResult.OK)
         {
@@ -240,6 +245,78 @@ internal sealed class AgentApplicationContext : ApplicationContext
         {
             if (manual) MessageBox.Show("检查或安装更新失败：\r\n" + exception.Message, "检查更新", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return false;
+        }
+    }
+
+    private void ScheduleBetterGiUpdateCheck()
+    {
+        var last = _settingsStore.Current.LastBetterGiUpdateCheckAt;
+        if (last is not null && DateTimeOffset.UtcNow - last < TimeSpan.FromHours(24)) return;
+        var timer = new System.Windows.Forms.Timer { Interval = 20_000 };
+        timer.Tick += async (_, _) =>
+        {
+            timer.Stop();
+            timer.Dispose();
+            await CheckForBetterGiUpdatesAsync(manual: false);
+        };
+        timer.Start();
+    }
+
+    private async Task CheckForBetterGiUpdatesAsync(bool manual)
+    {
+        try
+        {
+            var release = await _betterGiUpdates.CheckLatestAsync();
+            if (release is null)
+            {
+                if (manual) MessageBox.Show("未能识别 BetterGI 官方最新版本。", "检查 BetterGI 更新", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            var installed = BetterGiVersionPolicy.Check(_settingsStore.Current.BetterGiExecutablePath);
+            _settingsStore.Update(value =>
+            {
+                value.LastBetterGiUpdateCheckAt = DateTimeOffset.UtcNow;
+                value.LatestKnownBetterGiVersion = release.Version.ToString();
+                value.LatestKnownBetterGiReleaseUrl = release.ReleaseUrl;
+            });
+
+            var installedVersion = Version.TryParse(installed.Version, out var parsed) ? parsed : null;
+            if (installedVersion is not null && release.Version <= installedVersion)
+            {
+                if (manual)
+                {
+                    var compatibility = installed.Verified ? "当前版本已经过 BetterGI Remote 验证。" : installed.Message;
+                    MessageBox.Show($"当前 BetterGI {installedVersion} 已是官方最新版。\r\n\r\n{compatibility}", "检查 BetterGI 更新", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                return;
+            }
+
+            var message = installedVersion is null
+                ? $"BetterGI 官方最新版为 {release.Version}。"
+                : $"发现 BetterGI {release.Version}，当前电脑为 {installedVersion}。";
+            if (manual)
+            {
+                var answer = MessageBox.Show(message + "\r\n\r\n是否打开 BetterGI 官方发布页？更新 BetterGI 后，请同时保持 BetterGI Remote 为最新版。", "发现 BetterGI 更新", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+                if (answer == DialogResult.Yes)
+                {
+                    Process.Start(new ProcessStartInfo(release.ReleaseUrl) { UseShellExecute = true });
+                }
+                return;
+            }
+
+            if (!string.Equals(_settingsStore.Current.LastNotifiedBetterGiVersion, release.Version.ToString(), StringComparison.Ordinal))
+            {
+                _settingsStore.Update(value => value.LastNotifiedBetterGiVersion = release.Version.ToString());
+                _tray.BalloonTipTitle = "BetterGI 有新版本";
+                _tray.BalloonTipText = message + " 请同时检查 BetterGI Remote 更新。";
+                _tray.BalloonTipIcon = ToolTipIcon.Info;
+                _tray.ShowBalloonTip(10_000);
+            }
+        }
+        catch (Exception exception)
+        {
+            if (manual) MessageBox.Show("检查 BetterGI 更新失败：\r\n" + exception.Message, "检查 BetterGI 更新", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 

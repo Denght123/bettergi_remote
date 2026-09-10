@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
+	"io"
 	"io/fs"
 	"mime"
 	"net/http"
@@ -32,22 +33,32 @@ const (
 )
 
 var (
-	channelPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{22}$`)
-	tokenPattern   = regexp.MustCompile(`^[A-Za-z0-9_-]{43}$`)
+	channelPattern     = regexp.MustCompile(`^[A-Za-z0-9_-]{22}$`)
+	tokenPattern       = regexp.MustCompile(`^[A-Za-z0-9_-]{43}$`)
+	releaseTagPattern  = regexp.MustCompile(`^v?[0-9]+\.[0-9]+\.[0-9]+(?:[-+][A-Za-z0-9.-]+)?$`)
+	updateAssetPattern = regexp.MustCompile(`^BetterGI\.Remote\.Setup\.[0-9]+\.[0-9]+\.[0-9]+\.exe$`)
 )
 
 type Options struct {
-	AllowedOrigin  string
-	MaxConnections int
-	Now            func() time.Time
+	AllowedOrigin      string
+	MaxConnections     int
+	Now                func() time.Time
+	HTTPClient         *http.Client
+	BetterGiReleaseURL string
+	UpdateRoot         string
 }
 
 type Server struct {
-	options     Options
-	rooms       map[string]*room
-	roomsMu     sync.Mutex
-	connections atomic.Int64
-	upgrader    websocket.Upgrader
+	options             Options
+	rooms               map[string]*room
+	roomsMu             sync.Mutex
+	connections         atomic.Int64
+	upgrader            websocket.Upgrader
+	releaseClient       *http.Client
+	betterGiReleaseURL  string
+	betterGiMu          sync.Mutex
+	betterGiCached      []byte
+	betterGiCachedUntil time.Time
 }
 
 type registration struct {
@@ -95,10 +106,18 @@ func NewServer(options Options) *Server {
 	if options.Now == nil {
 		options.Now = time.Now
 	}
+	if options.HTTPClient == nil {
+		options.HTTPClient = &http.Client{Timeout: 15 * time.Second}
+	}
+	if options.BetterGiReleaseURL == "" {
+		options.BetterGiReleaseURL = "https://api.github.com/repos/babalae/better-genshin-impact/releases/latest"
+	}
 
 	server := &Server{
-		options: options,
-		rooms:   make(map[string]*room),
+		options:            options,
+		rooms:              make(map[string]*room),
+		releaseClient:      options.HTTPClient,
+		betterGiReleaseURL: options.BetterGiReleaseURL,
 	}
 	server.upgrader = websocket.Upgrader{
 		ReadBufferSize:  1024,
@@ -111,7 +130,12 @@ func NewServer(options Options) *Server {
 func (s *Server) Handler(webRoot string) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", s.handleHealth)
+	mux.HandleFunc("/api/bettergi/latest", s.handleBetterGiRelease)
 	mux.HandleFunc("/ws", s.handleWebSocket)
+	if s.options.UpdateRoot != "" {
+		mux.HandleFunc("/updates/latest.json", s.handleUpdateManifest)
+		mux.HandleFunc("/downloads/", s.handleUpdateDownload)
+	}
 
 	if webRoot != "" {
 		mux.Handle("/", spaHandler(webRoot))
@@ -121,6 +145,34 @@ func (s *Server) Handler(webRoot string) http.Handler {
 		})
 	}
 	return securityHeaders(mux)
+}
+
+func (s *Server) handleUpdateManifest(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.Header().Set("Allow", "GET, HEAD")
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	http.ServeFile(w, r, filepath.Join(s.options.UpdateRoot, "latest.json"))
+}
+
+func (s *Server) handleUpdateDownload(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.Header().Set("Allow", "GET, HEAD")
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	name := strings.TrimPrefix(r.URL.Path, "/downloads/")
+	if !updateAssetPattern.MatchString(name) {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	http.ServeFile(w, r, filepath.Join(s.options.UpdateRoot, name))
 }
 
 func securityHeaders(next http.Handler) http.Handler {
@@ -152,13 +204,67 @@ func spaHandler(root string) http.Handler {
 				w.Header().Set("Content-Type", contentType)
 			}
 		}
-		if isShell || clean == "sw.js" || filepath.Ext(clean) == ".webmanifest" {
+		if isShell || clean == "sw.js" || filepath.Ext(clean) == ".webmanifest" || strings.HasPrefix(filepath.ToSlash(clean), "updates/") {
 			w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-		} else if strings.HasPrefix(filepath.ToSlash(clean), "assets/") {
+		} else if strings.HasPrefix(filepath.ToSlash(clean), "assets/") || strings.HasPrefix(filepath.ToSlash(clean), "downloads/") {
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		}
 		fileServer.ServeHTTP(w, r)
 	})
+}
+
+func (s *Server) handleBetterGiRelease(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	s.betterGiMu.Lock()
+	defer s.betterGiMu.Unlock()
+	if len(s.betterGiCached) > 0 && s.options.Now().Before(s.betterGiCachedUntil) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "public, max-age=900")
+		_, _ = w.Write(s.betterGiCached)
+		return
+	}
+
+	request, err := http.NewRequestWithContext(r.Context(), http.MethodGet, s.betterGiReleaseURL, nil)
+	if err != nil {
+		http.Error(w, "release lookup unavailable", http.StatusBadGateway)
+		return
+	}
+	request.Header.Set("Accept", "application/vnd.github+json")
+	request.Header.Set("User-Agent", "BetterGI-Remote-Relay")
+	response, err := s.releaseClient.Do(request)
+	if err != nil {
+		http.Error(w, "release lookup unavailable", http.StatusBadGateway)
+		return
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		http.Error(w, "release lookup unavailable", http.StatusBadGateway)
+		return
+	}
+	var upstream struct {
+		TagName string `json:"tag_name"`
+		HTMLURL string `json:"html_url"`
+	}
+	decoder := json.NewDecoder(io.LimitReader(response.Body, 1<<20))
+	if err := decoder.Decode(&upstream); err != nil || !releaseTagPattern.MatchString(upstream.TagName) || !strings.HasPrefix(upstream.HTMLURL, "https://github.com/babalae/better-genshin-impact/") {
+		http.Error(w, "invalid release response", http.StatusBadGateway)
+		return
+	}
+	payload, err := json.Marshal(upstream)
+	if err != nil {
+		http.Error(w, "release lookup unavailable", http.StatusBadGateway)
+		return
+	}
+	s.betterGiCached = payload
+	s.betterGiCachedUntil = s.options.Now().Add(15 * time.Minute)
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "public, max-age=900")
+	_, _ = w.Write(payload)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {

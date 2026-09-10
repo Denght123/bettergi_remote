@@ -18,10 +18,11 @@ BetterGI Remote 是一个轻量、无账号的 BetterGI 手机远程控制工具
 
 ## 下载
 
-当前版本：**v0.3.3**
+当前版本：**v0.3.4**
 
-- [下载 Windows 安装包](https://github.com/Denght123/bettergi_remote/releases/latest/download/BetterGI.Remote.Setup.0.3.3.exe)
-- SHA-256：`27346c27efd31323ef78ef2424719d296d6b4c1917a4e9251b11b5f54fbce414`
+- [从 BetterGI Remote 服务下载 Windows 安装包](https://bgiremote.163831.xyz/downloads/BetterGI.Remote.Setup.0.3.4.exe)
+- [GitHub Release 备用下载](https://github.com/Denght123/bettergi_remote/releases/latest/download/BetterGI.Remote.Setup.0.3.4.exe)
+- SHA-256：`1e31daee84956a691583fc57806127c3b130219bf20f17c04eb5f20b1ab81654`
 - 手机控制入口：[https://bgiremote.163831.xyz](https://bgiremote.163831.xyz)
 
 安装包目前没有购买商业代码签名证书，因此 Windows SmartScreen 可能显示“Windows 已保护你的电脑”。请确认文件来自本仓库 Release，并核对 SHA-256；然后点击“更多信息”→“仍要运行”。
@@ -90,6 +91,13 @@ Windows 小助手会在当前用户登录后自动启动并驻留系统托盘。
 - 保存设置时自动启用 BetterGI 奖励识别；任务报告新增“本次任务获得”和按电脑本地日期统计的“今日累计获得”。
 - 奖励识别失败或部分失败会明确提示，避免把不完整统计误认为完整结果。
 
+## v0.3.4 更新连接修复
+
+- 修复部分网络环境无法直连 `github.com:443` 时，“检查更新”直接失败的问题。
+- Remote 更新检查和安装包下载现在优先使用 `bgiremote.163831.xyz`，继续以 SHA-256 校验安装包；GitHub 仅作为备用检查源。
+- BetterGI 官方版本检查改由 VPS 代查并短时缓存，电脑端无需直接访问 GitHub API。
+- 安装包下载支持瞬时网络错误自动重试，并提供更明确的手动恢复提示。
+
 ## v0.3.1 修复
 
 - 修复部分 Windows 环境打开电脑端设置时因 GDI+ 无法解码 WebP 而提示 `Out of memory` 的问题。
@@ -140,7 +148,7 @@ go test ./...
 
 ## 已验证项目
 
-- .NET 自动测试 29 项通过，Windows Agent Release 构建 0 警告、0 错误。
+- .NET 自动测试 32 项通过，Windows Agent Release 构建 0 警告、0 错误。
 - PWA 自动测试 6 项通过。
 - Go 中转测试全部通过。
 - BetterGI 0.64.0 实机完成“领取邮件”、启动原神和正常退出流程。

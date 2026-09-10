@@ -16,11 +16,13 @@ func main() {
 	maxConnections := envInt("MAX_CONNECTIONS", 200)
 	allowedOrigin := os.Getenv("ALLOWED_ORIGIN")
 	webRoot := env("WEB_ROOT", "")
+	updateRoot := env("UPDATE_ROOT", "")
 
 	server := relay.NewServer(relay.Options{
 		AllowedOrigin:  allowedOrigin,
 		MaxConnections: maxConnections,
 		Now:            time.Now,
+		UpdateRoot:     updateRoot,
 	})
 
 	httpServer := &http.Server{
@@ -28,7 +30,7 @@ func main() {
 		Handler:           server.Handler(webRoot),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       75 * time.Second,
-		WriteTimeout:      15 * time.Second,
+		WriteTimeout:      10 * time.Minute,
 		ErrorLog:          log.New(os.Stderr, "http: ", log.LstdFlags),
 	}
 

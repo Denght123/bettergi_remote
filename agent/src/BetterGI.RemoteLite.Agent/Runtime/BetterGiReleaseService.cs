@@ -6,7 +6,7 @@ namespace BetterGI.RemoteLite.Agent.Runtime;
 internal sealed class BetterGiReleaseService
 {
     public const string ReleasesUrl = "https://github.com/babalae/better-genshin-impact/releases/latest";
-    private const string ApiUrl = "https://api.github.com/repos/babalae/better-genshin-impact/releases/latest";
+    private const string GitHubApiUrl = "https://api.github.com/repos/babalae/better-genshin-impact/releases/latest";
     private readonly HttpClient _client;
 
     public BetterGiReleaseService(HttpClient? client = null)
@@ -18,8 +18,28 @@ internal sealed class BetterGiReleaseService
 
     public async Task<BetterGiReleaseInfo?> CheckLatestAsync(CancellationToken cancellationToken = default)
     {
-        using var response = await _client.GetAsync(ApiUrl, cancellationToken).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
+        Exception? primaryError = null;
+        foreach (var url in new[] { ProductDefaults.BetterGiReleaseApiUrl, GitHubApiUrl })
+        {
+            try
+            {
+                using var response = await _client.GetAsync(url, cancellationToken).ConfigureAwait(false);
+                response.EnsureSuccessStatusCode();
+                var release = await ParseAsync(response, cancellationToken).ConfigureAwait(false);
+                if (release is not null) return release;
+                throw new InvalidDataException("版本服务返回了无法识别的数据。");
+            }
+            catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or JsonException or InvalidDataException)
+            {
+                if (primaryError is null) primaryError = exception;
+                else throw new InvalidOperationException("BetterGI 官方版本服务暂时不可用，请稍后重试。", new AggregateException(primaryError, exception));
+            }
+        }
+        return null;
+    }
+
+    private static async Task<BetterGiReleaseInfo?> ParseAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
         if (!document.RootElement.TryGetProperty("tag_name", out var tagNode))

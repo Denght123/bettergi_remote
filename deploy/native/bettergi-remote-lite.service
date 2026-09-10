@@ -11,6 +11,7 @@ WorkingDirectory=/opt/bettergi-remote-lite
 Environment=PORT=8080
 Environment=LISTEN_ADDRESS=127.0.0.1:8080
 Environment=WEB_ROOT=/opt/bettergi-remote-lite/web
+Environment=UPDATE_ROOT=/opt/bettergi-remote-lite/downloads
 Environment=ALLOWED_ORIGIN=https://bgiremote.163831.xyz
 ExecStart=/opt/bettergi-remote-lite/relay
 Restart=on-failure

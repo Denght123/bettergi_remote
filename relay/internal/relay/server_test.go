@@ -2,11 +2,13 @@ package relay
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -165,6 +167,71 @@ func TestSpaCacheHeadersKeepShellFresh(t *testing.T) {
 		if actual := response.Header.Get("Cache-Control"); actual != expected {
 			t.Fatalf("%s cache header = %q, want %q", path, actual, expected)
 		}
+	}
+}
+
+func TestUpdateFilesAreServedOutsideTheSpa(t *testing.T) {
+	root := t.TempDir()
+	manifest := `{"version":"0.3.4"}`
+	installer := []byte("trusted installer")
+	if err := os.WriteFile(filepath.Join(root, "latest.json"), []byte(manifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	name := "BetterGI.Remote.Setup.0.3.4.exe"
+	if err := os.WriteFile(filepath.Join(root, name), installer, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(NewServer(Options{UpdateRoot: root}).Handler(""))
+	defer server.Close()
+
+	response, err := http.Get(server.URL + "/updates/latest.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusOK || string(body) != manifest || response.Header.Get("Cache-Control") != "no-cache, no-store, must-revalidate" {
+		t.Fatalf("unexpected manifest response: status=%d cache=%q body=%s", response.StatusCode, response.Header.Get("Cache-Control"), body)
+	}
+
+	response, err = http.Get(server.URL + "/downloads/" + name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ = io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusOK || string(body) != string(installer) || response.Header.Get("Content-Disposition") == "" {
+		t.Fatalf("unexpected installer response: status=%d disposition=%q body=%s", response.StatusCode, response.Header.Get("Content-Disposition"), body)
+	}
+}
+
+func TestBetterGiReleaseProxyCachesValidatedResponse(t *testing.T) {
+	var calls atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"tag_name":"0.64.0","html_url":"https://github.com/babalae/better-genshin-impact/releases/tag/0.64.0","ignored":"value"}`))
+	}))
+	defer upstream.Close()
+	server := httptest.NewServer(NewServer(Options{HTTPClient: upstream.Client(), BetterGiReleaseURL: upstream.URL}).Handler(""))
+	defer server.Close()
+
+	for range 2 {
+		response, err := http.Get(server.URL + "/api/bettergi/latest")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var release map[string]string
+		if err := json.NewDecoder(response.Body).Decode(&release); err != nil {
+			t.Fatal(err)
+		}
+		_ = response.Body.Close()
+		if response.StatusCode != http.StatusOK || release["tag_name"] != "0.64.0" || release["ignored"] != "" {
+			t.Fatalf("unexpected proxied release: status=%d release=%v", response.StatusCode, release)
+		}
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("upstream calls = %d, want 1", calls.Load())
 	}
 }
 

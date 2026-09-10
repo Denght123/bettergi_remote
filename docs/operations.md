@@ -24,6 +24,8 @@ The Caddy configuration intentionally disables access logs. Do not add query-str
 
 The release also contains a standalone `relay-linux-amd64` binary. It can run under systemd with a host-installed Caddy. Templates are available in `deploy/native`, and the full procedure is documented in `docs/local-testing.md`.
 
+The native service sets `UPDATE_ROOT=/opt/bettergi-remote-lite/downloads`. This directory contains `latest.json` and the matching versioned installer. The relay serves them through dedicated `/updates/latest.json` and `/downloads/<installer>` routes so missing update files never fall back to the PWA shell.
+
 ## Capacity defaults
 
 - 64 KiB maximum application frame.

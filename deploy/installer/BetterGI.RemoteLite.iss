@@ -1,5 +1,5 @@
 #define MyAppName "BetterGI Remote"
-#define MyAppVersion "0.3.3"
+#define MyAppVersion "0.3.4"
 #define MyAppPublisher "BetterGI Remote contributors"
 #define MyAppExeName "BetterGI.RemoteLite.Agent.exe"
 

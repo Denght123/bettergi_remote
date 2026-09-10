@@ -1,5 +1,5 @@
-const CACHE = 'bettergi-remote-shell-v7';
-const SHELL = ['/', '/manifest.webmanifest', '/icon.svg', '/assets/genshin-character-ensemble.webp', '/assets/genshin-character-ensemble-mobile.webp'];
+const CACHE = 'bettergi-remote-shell-v8';
+const SHELL = ['/', '/manifest.webmanifest', '/icon.svg', '/assets/spring-adventure-party.webp', '/assets/spring-adventure-party-mobile.webp', '/assets/paimon-guide.webp'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)));

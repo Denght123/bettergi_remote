@@ -7,7 +7,7 @@
     <AssemblyName>BetterGI.RemoteLite.Agent</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <PublishTrimmed>false</PublishTrimmed>
-    <Version>0.3.1</Version>
+    <Version>0.3.2</Version>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
   <ItemGroup>
@@ -16,6 +16,7 @@
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="Assets\genshin-character-ensemble.jpg" Link="assets\genshin-character-ensemble.jpg" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\spring-adventure-party.jpg" Link="assets\spring-adventure-party.jpg" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\paimon-guide.jpg" Link="assets\paimon-guide.jpg" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

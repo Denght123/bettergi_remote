@@ -419,10 +419,9 @@ class App {
     const running = this.status.state === 'running' || Boolean(this.progress);
     return html`
       <section class="command-hero">
-        <div class="hero-image" role="img" aria-label="原神角色桑多涅、胡桃与纳西妲组合画面"></div>
+        <div class="hero-image" role="img" aria-label="原神角色在春日花园中庆祝的群像画面"></div>
         <div class="hero-shade"></div>
         <div class="hero-content">
-          <p class="hero-brand">BetterGI Remote</p>
           <h1>${running ? '远征正在进行' : ready ? '今日委托已就绪' : '等待终端就绪'}</h1>
           <p>${running ? `${this.progress?.currentTask ?? '正在准备任务'}` : ready ? '电脑状态正常，可以从这里启程。' : this.status.message ?? statusReason(this.status)}</p>
           <div class="hero-signal"><span class="status-dot ${ready ? 'good' : running ? 'busy' : 'bad'}"></span>${this.connection === 'online' ? this.pairing.pcName ?? '已连接电脑' : '电脑连接中'}</div>
@@ -484,6 +483,7 @@ class App {
         ? '点击微信右上角“…”收藏页面，或复制入口发给文件传输助手。以后在同一个微信中打开即可恢复绑定。'
         : '添加到主屏幕后，以后像 App 一样点图标打开，无需再扫码。';
     return html`<section class="entry-guide" aria-label="保存手机控制入口">
+      <div class="guide-portrait" role="img" aria-label="派蒙挥手提示"></div>
       <div><h2>${title}</h2><p>${copy}</p></div>
       <div class="entry-guide-actions">
         ${!temporary && this.installPrompt ? html`<md-filled-button ?disabled=${this.loading} @click=${() => void this.installApp()}>${this.busyAction === 'install' ? '正在添加…' : '添加到主屏幕'}</md-filled-button>` : nothing}
@@ -625,7 +625,7 @@ function metric(label: string, value: string): TemplateResult {
 
 function emptyPairing(): TemplateResult {
   return html`<section class="empty-state pairing-onboarding">
-    <div class="pairing-mark" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+    <div class="paimon-portrait" role="img" aria-label="派蒙向你挥手"></div>
     <h1>用手机连接 BetterGI</h1>
     <p>电脑安装 BetterGI Remote 后会直接显示二维码。扫描一次，以后从手机主屏幕打开即可。</p>
     <ol>
@@ -638,7 +638,7 @@ function emptyPairing(): TemplateResult {
 }
 
 function loadingState(message: string): TemplateResult {
-  return html`<section class="empty-state"><h1>${message}</h1><p>连接恢复后页面会自动同步，不会提交离线命令。</p></section>`;
+  return html`<section class="empty-state loading-state"><div class="paimon-portrait" role="img" aria-label="派蒙正在等待"></div><h1>${message}</h1><p>连接恢复后页面会自动同步，不会提交离线命令。</p></section>`;
 }
 
 function statusReason(status: AgentStatus): string {

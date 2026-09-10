@@ -18,7 +18,7 @@ public sealed class GitHubReleaseParserTests
     [Fact]
     public void IgnoresSameOrOlderVersion()
     {
-        Assert.Null(GitHubReleaseParser.ParseLatest(Release("v0.3.1", $"sha256:{Digest}"), new Version(0, 3, 1)));
+        Assert.Null(GitHubReleaseParser.ParseLatest(Release("v0.3.2", $"sha256:{Digest}"), new Version(0, 3, 2)));
     }
 
     [Fact]

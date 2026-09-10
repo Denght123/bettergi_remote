@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-release="${1:-0.3.1}"
+release="${1:-0.3.2}"
 app_root="/opt/bettergi-remote-lite"
 incoming="/tmp/bgrl-deploy-${release}"
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"

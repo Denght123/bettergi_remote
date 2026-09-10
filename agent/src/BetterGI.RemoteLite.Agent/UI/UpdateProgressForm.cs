@@ -12,10 +12,11 @@ internal sealed class UpdateProgressForm : Form
         FormBorderStyle = FormBorderStyle.FixedDialog;
         ControlBox = false;
         ClientSize = new Size(430, 128);
-        BackColor = Color.FromArgb(15, 31, 51);
-        _label.ForeColor = Color.FromArgb(244, 228, 187);
+        BackColor = UiPalette.Paper;
+        _label.ForeColor = UiPalette.PineDeep;
         _label.Font = new Font(SystemFonts.MessageBoxFont!, FontStyle.Bold);
         _label.Text = $"正在安全下载 BetterGI Remote {version}…";
+        _progress.ForeColor = UiPalette.Violet;
         Controls.Add(_label);
         Controls.Add(_progress);
     }

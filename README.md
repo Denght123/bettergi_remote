@@ -18,10 +18,10 @@ BetterGI Remote 是一个轻量、无账号的 BetterGI 手机远程控制工具
 
 ## 下载
 
-当前版本：**v0.3.1**
+当前版本：**v0.3.2**
 
-- [下载 Windows 安装包](https://github.com/Denght123/bettergi_remote/releases/latest/download/BetterGI.Remote.Setup.0.3.1.exe)
-- SHA-256：`B9E28BAE574AB6606D251FA00E6BEEBB2CA2592A6BB67CCF06CCB559A4362674`
+- [下载 Windows 安装包](https://github.com/Denght123/bettergi_remote/releases/latest/download/BetterGI.Remote.Setup.0.3.2.exe)
+- SHA-256：`4021be0198973f548f6cf0027e29d86818149917959979ced30b7f7ac00fb6d5`
 - 手机控制入口：[https://bgiremote.163831.xyz](https://bgiremote.163831.xyz)
 
 安装包目前没有购买商业代码签名证书，因此 Windows SmartScreen 可能显示“Windows 已保护你的电脑”。请确认文件来自本仓库 Release，并核对 SHA-256；然后点击“更多信息”→“仍要运行”。
@@ -76,6 +76,12 @@ Windows 小助手会在当前用户登录后自动启动并驻留系统托盘。
 - “立即同步”可发现电脑源配置中新增加的一条龙任务。
 - Windows 客户端可检查 GitHub Releases，校验安装包 SHA-256 后直接升级；任务运行中不会安装更新。
 - 手机端和桌面端采用新的幻想冒险视觉，并针对手机使用独立多角色构图。
+
+## v0.3.2 界面与维护功能
+
+- 手机端换用用户提供的春日群像和派蒙图片，整体改为草木绿、湖蓝、淡紫与奶油白色系。
+- 电脑设置页直接展示二维码、状态、网页入口、重新绑定、解除绑定和检查更新按钮。
+- 新增“卸载 BetterGI Remote”按钮，确认后调用安装目录中的官方卸载向导；电脑配置和绑定数据默认保留。
 
 ## v0.3.1 修复
 

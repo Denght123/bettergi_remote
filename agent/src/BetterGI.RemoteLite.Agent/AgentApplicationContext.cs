@@ -27,7 +27,10 @@ internal sealed class AgentApplicationContext : ApplicationContext
         menu.Items.Add("解除当前手机绑定", null, (_, _) => UnbindPhone());
         menu.Items.Add("查看当前状态", null, (_, _) => ShowStatus());
         menu.Items.Add("打开手机控制网页", null, (_, _) => OpenControlEntry());
-        menu.Items.Add("检查更新", null, async (_, _) => await CheckForUpdatesAsync(manual: true));
+        menu.Items.Add("检查更新", null, async (_, _) =>
+        {
+            if (await CheckForUpdatesAsync(manual: true)) ExitAgent();
+        });
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("退出", null, (_, _) => ExitAgent());
 
@@ -65,7 +68,16 @@ internal sealed class AgentApplicationContext : ApplicationContext
 
     private void OpenSettings(bool firstRun = false)
     {
-        using var form = new SettingsForm(_settingsStore, firstRun);
+        using var form = new SettingsForm(
+            _settingsStore,
+            firstRun,
+            showPairing: ShowPairing,
+            rebindPhone: RebindPhone,
+            unbindPhone: UnbindPhone,
+            showStatus: ShowStatus,
+            openControlEntry: OpenControlEntry,
+            checkForUpdates: () => CheckForUpdatesAsync(manual: true),
+            exitApplication: ExitAgent);
         if (form.ShowDialog() == DialogResult.OK)
         {
             RestartRuntime();
@@ -189,12 +201,12 @@ internal sealed class AgentApplicationContext : ApplicationContext
         {
             timer.Stop();
             timer.Dispose();
-            await CheckForUpdatesAsync(manual: false);
+            if (await CheckForUpdatesAsync(manual: false)) ExitAgent();
         };
         timer.Start();
     }
 
-    private async Task CheckForUpdatesAsync(bool manual)
+    private async Task<bool> CheckForUpdatesAsync(bool manual)
     {
         try
         {
@@ -203,30 +215,31 @@ internal sealed class AgentApplicationContext : ApplicationContext
             if (update is null)
             {
                 if (manual) MessageBox.Show($"当前已是最新版 {ProductDefaults.ProductVersion}。", "检查更新", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
+                return false;
             }
             if (string.Equals(_runtime?.GetStatus().State, "running", StringComparison.OrdinalIgnoreCase))
             {
                 if (manual) MessageBox.Show("当前任务仍在执行。请等待任务结束后再安装更新。", "暂不能更新", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
+                return false;
             }
             var answer = MessageBox.Show(
                 $"发现 BetterGI Remote {update.Version}。\r\n\r\n点击“是”将从官方 GitHub Release 下载、校验并安装。",
                 "发现新版本",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Information);
-            if (answer != DialogResult.Yes) return;
+            if (answer != DialogResult.Yes) return false;
             using var progress = new UpdateProgressForm(update.Version.ToString());
             progress.Show();
             var reporter = new Progress<int>(progress.SetProgress);
             var installer = await _updates.DownloadAsync(update, reporter);
             progress.Close();
             UpdateService.LaunchInstaller(installer);
-            ExitAgent();
+            return true;
         }
         catch (Exception exception)
         {
             if (manual) MessageBox.Show("检查或安装更新失败：\r\n" + exception.Message, "检查更新", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return false;
         }
     }
 

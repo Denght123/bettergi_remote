@@ -12,11 +12,11 @@ internal sealed class PairingForm : Form
     {
         Text = alreadyBound ? "手机连接二维码" : "连接手机";
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(500, 680);
+        ClientSize = new Size(520, 720);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;
-        BackColor = Color.FromArgb(13, 29, 49);
+        BackColor = UiPalette.Paper;
 
         var url = relayBaseUrl.TrimEnd('/') + "/#pair=" + Base64Url.Encode(secret);
         using var generator = new QRCodeGenerator();
@@ -28,18 +28,30 @@ internal sealed class PairingForm : Form
         var title = new Label
         {
             Text = alreadyBound ? "在手机上恢复控制端" : "最后一步：用手机扫码",
-            Font = new Font(Font.FontFamily, 16, FontStyle.Bold),
-            TextAlign = ContentAlignment.MiddleCenter,
-            Dock = DockStyle.Top,
-            Height = 64,
+            AutoSize = true,
+            Font = new Font("Microsoft YaHei UI", 18, FontStyle.Bold),
+            ForeColor = Color.White,
+            BackColor = Color.Transparent,
+            Location = new Point(28, 41),
         };
+        var hero = new HeroPanel
+        {
+            Dock = DockStyle.Top,
+            Height = 122,
+            BackColor = UiPalette.Violet,
+            BackgroundImage = ImageAssetLoader.Load(Path.Combine(AppContext.BaseDirectory, "assets", "paimon-guide.jpg")),
+            ImageFocusY = 0.36f,
+            ShadeFrom = Color.FromArgb(220, 73, 59, 102),
+            ShadeTo = Color.FromArgb(42, 73, 59, 102),
+        };
+        hero.Controls.Add(title);
         var picture = new PictureBox
         {
             Image = _bitmap,
             SizeMode = PictureBoxSizeMode.Zoom,
             Dock = DockStyle.Top,
-            Height = 350,
-            Padding = new Padding(16),
+            Height = 320,
+            Padding = new Padding(22),
         };
         var notice = new Label
         {
@@ -47,7 +59,7 @@ internal sealed class PairingForm : Form
                 ? "使用之前绑定的手机浏览器扫描。二维码包含绑定密钥，请不要截图或转发。"
                 : "推荐用系统相机扫码，便于添加到主屏幕。若用微信扫码，绑定后请立即收藏页面或发送给文件传输助手。",
             Dock = DockStyle.Top,
-            Height = 72,
+            Height = 68,
             Padding = new Padding(24, 8, 24, 8),
             TextAlign = ContentAlignment.MiddleCenter,
         };
@@ -56,7 +68,7 @@ internal sealed class PairingForm : Form
             Text = "二维码有效 5 分钟",
             Dock = DockStyle.Top,
             Height = 30,
-            ForeColor = Color.FromArgb(214, 181, 106),
+            ForeColor = UiPalette.Violet,
             TextAlign = ContentAlignment.MiddleCenter,
         };
         if (alreadyBound && bindingExpiresAt is { } expiry)
@@ -70,16 +82,16 @@ internal sealed class PairingForm : Form
             Dock = DockStyle.Top,
             Margin = new Padding(20),
             TextAlign = HorizontalAlignment.Center,
+            BackColor = UiPalette.Cream,
+            ForeColor = UiPalette.Ink,
         };
         var copy = new Button
         {
             Text = "复制日常控制网址",
             Dock = DockStyle.Top,
             Height = 42,
-            BackColor = Color.FromArgb(214, 181, 106),
-            ForeColor = Color.FromArgb(35, 27, 13),
-            FlatStyle = FlatStyle.Flat,
         };
+        UiPalette.StylePrimary(copy);
         copy.Click += (_, _) =>
         {
             Clipboard.SetText(relayBaseUrl.TrimEnd('/'));
@@ -92,6 +104,7 @@ internal sealed class PairingForm : Form
             Height = 44,
             Visible = alreadyBound,
         };
+        UiPalette.StyleSecondary(done);
         done.Click += (_, _) => Close();
         Controls.Add(done);
         Controls.Add(copy);
@@ -99,16 +112,11 @@ internal sealed class PairingForm : Form
         Controls.Add(hint);
         Controls.Add(notice);
         Controls.Add(picture);
-        Controls.Add(title);
+        Controls.Add(hero);
 
-        title.ForeColor = Color.FromArgb(248, 239, 215);
-        title.BackColor = Color.Transparent;
-        notice.ForeColor = Color.FromArgb(205, 216, 225);
+        notice.ForeColor = UiPalette.Muted;
         notice.BackColor = Color.Transparent;
-        picture.BackColor = Color.FromArgb(245, 239, 225);
-        done.BackColor = Color.FromArgb(214, 181, 106);
-        done.ForeColor = Color.FromArgb(35, 27, 13);
-        done.FlatStyle = FlatStyle.Flat;
+        picture.BackColor = UiPalette.Cream;
 
         if (!alreadyBound && isBound is not null)
         {

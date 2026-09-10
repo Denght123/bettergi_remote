@@ -2,6 +2,16 @@ namespace BetterGI.RemoteLite.Agent.UI;
 
 internal sealed class HeroPanel : Panel
 {
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            BackgroundImage?.Dispose();
+            BackgroundImage = null;
+        }
+        base.Dispose(disposing);
+    }
+
     protected override void OnPaintBackground(PaintEventArgs e)
     {
         e.Graphics.Clear(BackColor);

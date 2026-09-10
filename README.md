@@ -18,10 +18,10 @@ BetterGI Remote 是一个轻量、无账号的 BetterGI 手机远程控制工具
 
 ## 下载
 
-当前版本：**v0.3.0**
+当前版本：**v0.3.1**
 
-- [下载 Windows 安装包](https://github.com/Denght123/bettergi_remote/releases/latest/download/BetterGI.Remote.Setup.0.3.0.exe)
-- SHA-256：`6F8E1E700BB7EF5DB207360716C69A7671A4E10BF01016981472459EEE6F229B`
+- [下载 Windows 安装包](https://github.com/Denght123/bettergi_remote/releases/latest/download/BetterGI.Remote.Setup.0.3.1.exe)
+- SHA-256：`B9E28BAE574AB6606D251FA00E6BEEBB2CA2592A6BB67CCF06CCB559A4362674`
 - 手机控制入口：[https://bgiremote.163831.xyz](https://bgiremote.163831.xyz)
 
 安装包目前没有购买商业代码签名证书，因此 Windows SmartScreen 可能显示“Windows 已保护你的电脑”。请确认文件来自本仓库 Release，并核对 SHA-256；然后点击“更多信息”→“仍要运行”。
@@ -76,6 +76,12 @@ Windows 小助手会在当前用户登录后自动启动并驻留系统托盘。
 - “立即同步”可发现电脑源配置中新增加的一条龙任务。
 - Windows 客户端可检查 GitHub Releases，校验安装包 SHA-256 后直接升级；任务运行中不会安装更新。
 - 手机端和桌面端采用新的幻想冒险视觉，并针对手机使用独立多角色构图。
+
+## v0.3.1 修复
+
+- 修复部分 Windows 环境打开电脑端设置时因 GDI+ 无法解码 WebP 而提示 `Out of memory` 的问题。
+- 桌面页眉改用兼容 JPEG，并在图片损坏或缺失时安全回退为纯色背景。
+- 安装向导增加可选的“创建桌面快捷方式”勾选项，默认不勾选。
 
 ## 安全设计
 

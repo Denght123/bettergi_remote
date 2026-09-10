@@ -1,4 +1,4 @@
-const CACHE = 'bettergi-remote-shell-v6';
+const CACHE = 'bettergi-remote-shell-v7';
 const SHELL = ['/', '/manifest.webmanifest', '/icon.svg', '/assets/genshin-character-ensemble.webp', '/assets/genshin-character-ensemble-mobile.webp'];
 
 self.addEventListener('install', event => {

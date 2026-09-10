@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using BetterGI.RemoteLite.Agent.Native;
 using BetterGI.RemoteLite.Agent.Storage;
@@ -72,14 +73,14 @@ internal sealed class SettingsForm : Form
 
     private Control BuildHeader()
     {
-        var asset = Path.Combine(AppContext.BaseDirectory, "assets", "genshin-character-ensemble.webp");
+        var asset = Path.Combine(AppContext.BaseDirectory, "assets", "genshin-character-ensemble.jpg");
         var panel = new HeroPanel
         {
             Dock = DockStyle.Top,
             Height = 184,
             BackColor = Color.FromArgb(13, 29, 49),
             Padding = new Padding(34, 36, 28, 20),
-            BackgroundImage = File.Exists(asset) ? Image.FromFile(asset) : null,
+            BackgroundImage = LoadHeaderImage(asset),
             BackgroundImageLayout = ImageLayout.Zoom,
         };
         panel.Controls.Add(new Label
@@ -100,6 +101,20 @@ internal sealed class SettingsForm : Form
             Location = new Point(36, 98),
         });
         return panel;
+    }
+
+    private static Image? LoadHeaderImage(string path)
+    {
+        if (!File.Exists(path)) return null;
+        try
+        {
+            using var source = Image.FromFile(path);
+            return new Bitmap(source);
+        }
+        catch (Exception exception) when (exception is ArgumentException or OutOfMemoryException or ExternalException)
+        {
+            return null;
+        }
     }
 
     private Control BuildContent()

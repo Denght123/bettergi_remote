@@ -7,7 +7,7 @@
     <AssemblyName>BetterGI.RemoteLite.Agent</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <PublishTrimmed>false</PublishTrimmed>
-    <Version>0.3.0</Version>
+    <Version>0.3.1</Version>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
   <ItemGroup>
@@ -16,6 +16,6 @@
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="..\..\..\web\public\assets\genshin-character-ensemble.webp" Link="assets\genshin-character-ensemble.webp" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\genshin-character-ensemble.jpg" Link="assets\genshin-character-ensemble.jpg" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

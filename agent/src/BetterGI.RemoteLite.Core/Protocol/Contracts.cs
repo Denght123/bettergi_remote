@@ -102,7 +102,7 @@ public sealed record AgentStatusDto(
     string? Message = null,
     DateTimeOffset? BindingExpiresAt = null,
     int? BindingDaysRemaining = null,
-    string AgentVersion = "0.3.0");
+    string AgentVersion = "0.3.1");
 
 public sealed record TaskItemDto(string Id, string Name, bool Enabled, bool IsCustom, int Order);
 

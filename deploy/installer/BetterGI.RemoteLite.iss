@@ -1,5 +1,5 @@
 #define MyAppName "BetterGI Remote"
-#define MyAppVersion "0.3.0"
+#define MyAppVersion "0.3.1"
 #define MyAppPublisher "BetterGI Remote contributors"
 #define MyAppExeName "BetterGI.RemoteLite.Agent.exe"
 
@@ -27,8 +27,12 @@ Source: "..\..\artifacts\agent-win-x64\*"; DestDir: "{app}"; Flags: ignoreversio
 Source: "install-autostart.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
 Source: "remove-autostart.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
 
+[Tasks]
+Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "附加选项："; Flags: unchecked
+
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\tools\install-autostart.ps1"" -Executable ""{app}\{#MyAppExeName}"""; Flags: runhidden waituntilterminated

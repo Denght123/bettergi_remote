@@ -16,6 +16,18 @@ BetterGI Remote 是一个轻量、无账号的 BetterGI 手机远程控制工具
                                   BetterGI 配置文件与官方命令行
 ```
 
+## 界面展示
+
+### 电脑端设置
+
+![BetterGI Remote 电脑端设置界面](docs/images/desktop-settings-v0.3.5.png)
+
+### 手机端控制页
+
+<p align="center">
+  <img src="docs/images/mobile-home-v0.3.5.jpg" alt="BetterGI Remote 手机端控制页面" width="420">
+</p>
+
 ## 下载
 
 当前版本：**v0.3.5**

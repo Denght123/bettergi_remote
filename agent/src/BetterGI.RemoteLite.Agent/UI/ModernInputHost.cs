@@ -5,14 +5,17 @@ namespace BetterGI.RemoteLite.Agent.UI;
 internal sealed class ModernInputHost : Control
 {
     private readonly Control _input;
+    private readonly ComboDropIndicator? _comboDropIndicator;
     private bool _hovered;
 
     public ModernInputHost(Control input)
     {
+        SetStyle(ControlStyles.SupportsTransparentBackColor | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
         _input = input;
         Height = 43;
         Dock = DockStyle.Top;
         Margin = new Padding(0, 0, 0, 6);
+        BackColor = Color.Transparent;
         DoubleBuffered = true;
         Cursor = input.Cursor;
         if (input is TextBox textBox)
@@ -22,6 +25,7 @@ internal sealed class ModernInputHost : Control
         if (input is ComboBox comboBox)
         {
             comboBox.FlatStyle = FlatStyle.Flat;
+            _comboDropIndicator = new ComboDropIndicator(comboBox);
         }
         input.BackColor = UiPalette.Input;
         input.ForeColor = UiPalette.Text;
@@ -29,6 +33,11 @@ internal sealed class ModernInputHost : Control
         input.GotFocus += (_, _) => Invalidate();
         input.LostFocus += (_, _) => Invalidate();
         Controls.Add(input);
+        if (_comboDropIndicator is not null)
+        {
+            Controls.Add(_comboDropIndicator);
+            _comboDropIndicator.BringToFront();
+        }
     }
 
     protected override void OnLayout(LayoutEventArgs e)
@@ -37,6 +46,11 @@ internal sealed class ModernInputHost : Control
         if (_input is ComboBox)
         {
             _input.Bounds = new Rectangle(10, 7, Math.Max(0, ClientSize.Width - 20), 29);
+            if (_comboDropIndicator is not null)
+            {
+                _comboDropIndicator.Bounds = new Rectangle(Math.Max(0, ClientSize.Width - 39), 5, 33, Math.Max(1, ClientSize.Height - 10));
+                _comboDropIndicator.BringToFront();
+            }
         }
         else
         {
@@ -73,5 +87,60 @@ internal sealed class ModernInputHost : Control
         using var border = new Pen(_input.Focused ? UiPalette.AccentBlue : _hovered ? UiPalette.LineBright : UiPalette.Line, _input.Focused ? 1.6f : 1f);
         e.Graphics.FillPath(fill, path);
         e.Graphics.DrawPath(border, path);
+    }
+
+    private sealed class ComboDropIndicator : Control
+    {
+        private readonly ComboBox _comboBox;
+        private bool _hovered;
+
+        public ComboDropIndicator(ComboBox comboBox)
+        {
+            _comboBox = comboBox;
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer, true);
+            Cursor = Cursors.Hand;
+            TabStop = false;
+        }
+
+        protected override void OnMouseEnter(EventArgs e)
+        {
+            base.OnMouseEnter(e);
+            _hovered = true;
+            Invalidate();
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            base.OnMouseLeave(e);
+            _hovered = false;
+            Invalidate();
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            base.OnMouseDown(e);
+            _comboBox.Focus();
+            _comboBox.DroppedDown = true;
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            e.Graphics.Clear(_hovered ? UiPalette.SurfaceRaised : UiPalette.Input);
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            using var pen = new Pen(UiPalette.TextMuted, 1.8f)
+            {
+                StartCap = LineCap.Round,
+                EndCap = LineCap.Round,
+                LineJoin = LineJoin.Round,
+            };
+            var centerX = Width / 2f;
+            var centerY = Height / 2f;
+            e.Graphics.DrawLines(pen,
+            [
+                new PointF(centerX - 4.5f, centerY - 2f),
+                new PointF(centerX, centerY + 2.5f),
+                new PointF(centerX + 4.5f, centerY - 2f),
+            ]);
+        }
     }
 }

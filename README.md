@@ -18,11 +18,11 @@ BetterGI Remote 是一个轻量、无账号的 BetterGI 手机远程控制工具
 
 ## 下载
 
-当前版本：**v0.3.4**
+当前版本：**v0.3.5**
 
-- [从 BetterGI Remote 服务下载 Windows 安装包](https://bgiremote.163831.xyz/downloads/BetterGI.Remote.Setup.0.3.4.exe)
-- [GitHub Release 备用下载](https://github.com/Denght123/bettergi_remote/releases/latest/download/BetterGI.Remote.Setup.0.3.4.exe)
-- SHA-256：`1e31daee84956a691583fc57806127c3b130219bf20f17c04eb5f20b1ab81654`
+- [从 BetterGI Remote 服务下载 Windows 安装包](https://bgiremote.163831.xyz/downloads/BetterGI.Remote.Setup.0.3.5.exe)
+- [GitHub Release 备用下载](https://github.com/Denght123/bettergi_remote/releases/latest/download/BetterGI.Remote.Setup.0.3.5.exe)
+- SHA-256：`93d0bcaf680432d2464b8c1c150685834dd59119357c959eb6b7a461669e2371`
 - 手机控制入口：[https://bgiremote.163831.xyz](https://bgiremote.163831.xyz)
 
 安装包目前没有购买商业代码签名证书，因此 Windows SmartScreen 可能显示“Windows 已保护你的电脑”。请确认文件来自本仓库 Release，并核对 SHA-256；然后点击“更多信息”→“仍要运行”。
@@ -97,6 +97,14 @@ Windows 小助手会在当前用户登录后自动启动并驻留系统托盘。
 - Remote 更新检查和安装包下载现在优先使用 `bgiremote.163831.xyz`，继续以 SHA-256 校验安装包；GitHub 仅作为备用检查源。
 - BetterGI 官方版本检查改由 VPS 代查并短时缓存，电脑端无需直接访问 GitHub API。
 - 安装包下载支持瞬时网络错误自动重试，并提供更明确的手动恢复提示。
+
+## v0.3.5 电脑端界面精修
+
+- 放大并统一电脑端线性图标，重新整理双栏宽度、按钮间距和通知配置入口。
+- 飞书机器人与 QQ 邮箱状态固定显示在首屏，并优先展示相关通知配置。
+- 输入框、下拉框和箭头改为统一深色自绘样式，修复高 DPI 下的白边、白色方块、文字裁切和错位。
+- 设置页启用合成双缓冲滚动，减少展开通知设置并拖动滚动条时的画面撕裂。
+- 托盘设置窗口增加单窗口激活和点击防抖，连续点击不会重复弹出多个窗口。
 
 ## v0.3.1 修复
 

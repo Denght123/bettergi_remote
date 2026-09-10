@@ -18,6 +18,8 @@ internal enum UiGlyph
     Save,
     Info,
     Chevron,
+    Bell,
+    Mail,
 }
 
 internal static class UiGlyphPainter
@@ -104,6 +106,17 @@ internal static class UiGlyphPainter
                 break;
             case UiGlyph.Chevron:
                 graphics.DrawLines(pen, [new PointF(x + 3, y + h * .38f), new PointF(x + w / 2f, y + h * .64f), new PointF(x + w - 3, y + h * .38f)]);
+                break;
+            case UiGlyph.Bell:
+                graphics.DrawArc(pen, x + w * .25f, y + h * .18f, w * .5f, h * .55f, 180, 180);
+                graphics.DrawLine(pen, x + w * .25f, y + h * .45f, x + w * .18f, y + h * .72f);
+                graphics.DrawLine(pen, x + w * .75f, y + h * .45f, x + w * .82f, y + h * .72f);
+                graphics.DrawLine(pen, x + w * .18f, y + h * .72f, x + w * .82f, y + h * .72f);
+                graphics.DrawArc(pen, x + w * .4f, y + h * .69f, w * .2f, h * .17f, 0, 180);
+                break;
+            case UiGlyph.Mail:
+                graphics.DrawRectangle(pen, x + 2, y + 4, w - 4, h - 8);
+                graphics.DrawLines(pen, [new PointF(x + 3, y + 5), new PointF(x + w / 2f, y + h * .58f), new PointF(x + w - 3, y + 5)]);
                 break;
         }
         graphics.SmoothingMode = previous;

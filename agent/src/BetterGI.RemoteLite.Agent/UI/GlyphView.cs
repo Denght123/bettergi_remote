@@ -4,8 +4,10 @@ internal sealed class GlyphView : Control
 {
     public GlyphView()
     {
+        SetStyle(ControlStyles.SupportsTransparentBackColor | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer, true);
         Size = new Size(24, 24);
-        Cursor = Cursors.Help;
+        BackColor = Color.Transparent;
+        Cursor = Cursors.Default;
         TabStop = false;
         DoubleBuffered = true;
     }
@@ -15,7 +17,6 @@ internal sealed class GlyphView : Control
 
     protected override void OnPaint(PaintEventArgs e)
     {
-        base.OnPaint(e);
         UiGlyphPainter.Draw(e.Graphics, Glyph, new Rectangle(2, 2, Math.Max(1, Width - 4), Math.Max(1, Height - 4)), GlyphColor);
     }
 }

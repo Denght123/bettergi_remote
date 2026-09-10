@@ -32,6 +32,10 @@ internal sealed class ModernButton : Button
     public UiGlyph Glyph { get; set; }
     public ModernButtonVariant Variant { get; set; } = ModernButtonVariant.Secondary;
     public int CornerRadius { get; set; } = 11;
+    public int GlyphSize { get; set; } = 21;
+    public int ContentPadding { get; set; } = 16;
+    public int GlyphGap { get; set; } = 10;
+    public Color CanvasColor { get; set; } = UiPalette.Surface;
 
     protected override void OnMouseEnter(EventArgs e)
     {
@@ -71,6 +75,7 @@ internal sealed class ModernButton : Button
 
     protected override void OnPaint(PaintEventArgs e)
     {
+        e.Graphics.Clear(CanvasColor);
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
         var rectangle = new Rectangle(1, _pressed ? 2 : 1, Width - 3, Height - 4);
         var (normal, hover, foreground, border) = Colors();
@@ -87,14 +92,14 @@ internal sealed class ModernButton : Button
         using var borderPen = new Pen(border, 1);
         e.Graphics.DrawPath(borderPen, path);
 
-        var iconSize = 19;
+        var iconSize = Math.Max(14, GlyphSize);
         var textSize = TextRenderer.MeasureText(Text, Font, new Size(int.MaxValue, Height), TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
-        var contentWidth = textSize.Width + (Glyph == UiGlyph.None ? 0 : iconSize + 8);
-        var startX = TextAlign == ContentAlignment.MiddleLeft ? 15 : Math.Max(12, (Width - contentWidth) / 2);
+        var contentWidth = textSize.Width + (Glyph == UiGlyph.None ? 0 : iconSize + GlyphGap);
+        var startX = TextAlign == ContentAlignment.MiddleLeft ? ContentPadding : Math.Max(ContentPadding, (Width - contentWidth) / 2);
         if (Glyph != UiGlyph.None)
         {
             UiGlyphPainter.Draw(e.Graphics, Glyph, new Rectangle(startX, (Height - iconSize) / 2 + (_pressed ? 1 : 0), iconSize, iconSize), foreground);
-            startX += iconSize + 8;
+            startX += iconSize + GlyphGap;
         }
         TextRenderer.DrawText(e.Graphics, Text, Font, new Rectangle(startX, _pressed ? 2 : 1, Math.Max(0, Width - startX - 10), Height - 3), foreground, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
         if (Focused && ShowFocusCues)

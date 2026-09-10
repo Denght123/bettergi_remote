@@ -18,6 +18,8 @@ internal sealed class AgentApplicationContext : ApplicationContext
     private readonly UpdateService _updates = new();
     private readonly BetterGiReleaseService _betterGiUpdates = new();
     private bool _exiting;
+    private SettingsForm? _settingsForm;
+    private long _lastSettingsOpenTick;
 
     public AgentApplicationContext(bool forceSetup = false)
     {
@@ -72,6 +74,25 @@ internal sealed class AgentApplicationContext : ApplicationContext
 
     private void OpenSettings(bool firstRun = false)
     {
+        if (_settingsForm is { IsDisposed: false })
+        {
+            if (_settingsForm.WindowState == FormWindowState.Minimized)
+            {
+                _settingsForm.WindowState = FormWindowState.Normal;
+            }
+            if (!_settingsForm.Visible)
+            {
+                _settingsForm.Show();
+            }
+            _settingsForm.Activate();
+            _settingsForm.BringToFront();
+            return;
+        }
+
+        var now = Environment.TickCount64;
+        if (now - _lastSettingsOpenTick < 500) return;
+        _lastSettingsOpenTick = now;
+
         using var form = new SettingsForm(
             _settingsStore,
             firstRun,
@@ -83,13 +104,21 @@ internal sealed class AgentApplicationContext : ApplicationContext
             checkForUpdates: () => CheckForUpdatesAsync(manual: true),
             checkForBetterGiUpdates: () => CheckForBetterGiUpdatesAsync(manual: true),
             exitApplication: ExitAgent);
-        if (form.ShowDialog() == DialogResult.OK)
+        _settingsForm = form;
+        try
         {
-            RestartRuntime();
-            if (string.IsNullOrEmpty(_settingsStore.Current.BoundPhoneDeviceId))
+            if (form.ShowDialog() == DialogResult.OK)
             {
-                ShowPairing();
+                RestartRuntime();
+                if (string.IsNullOrEmpty(_settingsStore.Current.BoundPhoneDeviceId))
+                {
+                    ShowPairing();
+                }
             }
+        }
+        finally
+        {
+            _settingsForm = null;
         }
     }
 

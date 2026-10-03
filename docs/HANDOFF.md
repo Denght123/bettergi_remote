@@ -8,7 +8,7 @@
 - Windows .NET 8 托盘 Agent + TypeScript/Lit PWA + Go Relay。
 - 手机扫码绑定、180 天可续期绑定、端到端加密、配置冲突检查、远程一条龙、停止快捷键、日志报告、飞书/QQ 邮箱、更新安装与卸载已实现。
 - 已实机验证 BetterGI 0.64.0；更高版本仅做结构检查，不能宣称已实机验证。
-- 已发布 GitHub Denght123/bettergi_remote；VPS 入口 https://bgiremote.163831.xyz；生产仍为 v0.3.5。
+- 已发布 GitHub Denght123/bettergi_remote；VPS 入口 https://bgiremote.163831.xyz；生产已更新为 v0.4.0。
 - 每日自动检查任务已按用户要求删除，不要恢复。
 - VPS 连接说明位于用户桌面 BetterGI-Remote-VPS连接说明.md；不要复制私钥。
 
@@ -33,7 +33,7 @@
 - 当前真实配置只读同步成功，超过四千字段。保存/运行模拟仅使用临时测试目录。
 - 本轮说明：feature-upgrade-2026-10-03.md，包含范围、上游限制、验收和未实机执行的部分。
 - 本地预览服务：127.0.0.1:4175，可使用 ?demo&view=config&scope=global、?demo&scenario=running、?demo&view=reports；演示数据已明确标注。
-- v0.4.0 正式包已生成，正在按用户授权推送并部署；本机安装保持 v0.3.5，没有覆盖安装。
+- v0.4.0 正式包、GitHub Release/标签及 VPS 部署完成；本机安装保持 v0.3.5，没有覆盖安装，需通过检查更新升级才能完整使用新功能。
 - 最终完整验证：Go 测试通过；PWA 12 测试、类型检查与构建通过；.NET 66 测试通过，Windows Release 构建 0 警告、0 错误。
 - 当前真实配置只读验证：4346 字段（全局 185、一条龙 67、调度/脚本 4094），68 页全部传输，最大页 22605 字节，初次读取约 77ms（本次电脑环境）。
 - 浏览器已验证分类、搜索、小数输入、未保存提示、Alt+方向键排序、320/390/1280px 横向布局及桌面最后字段无遮挡；截图 .impeccable/review/*20261003.png，内容是明确标注的演示数据。
@@ -41,3 +41,7 @@
 - 补齐官方取消日志四种格式、停止等待状态和重复停止处理；新网页通过能力字段提示旧电脑端升级。新版 SW 缓存版本 v9 用于触发网页刷新。
 - 正式包：artifacts/BetterGI.Remote.Setup.0.4.0.exe；SHA-256 ab1a83db75551150ef8f64cdf6c363388c13eb057fef84c008b41689b6f2c1d0。
 - 本次用户称已手动停止；检查时没有 BetterGI 进程，但本次测试没有新增执行报告，因此未将其宣称为完整实机验证。
+- 发布代码提交 c10c0f62d0393486870ce32daafa7331fdf92601（功能提交 5417d84）；v0.4.0 标签指向发布代码提交。
+- GitHub 该发布代码的两次 CI 运行均 success。正式资产大小 66405579 字节，GitHub 资产摘要与 VPS 公网下载 SHA-256 一致。
+- 线上验证：systemd active/enabled，Nginx 配置通过，healthz 正常，PWA/更新清单 0.4.0，SW v9，Relay 仍仅监听 127.0.0.1:8080，0.3.5 旧包下载仍返回 200。
+- VPS 备份 /opt/bettergi-remote-lite/backups/20261003T145519Z-0.4.0。x-ui 部署前后均 inactive，未修改其服务或端口配置。

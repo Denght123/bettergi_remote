@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
+using BetterGI.RemoteLite.Updates;
 
 namespace BetterGI.RemoteLite.Agent.Runtime;
 
@@ -18,42 +19,18 @@ internal sealed class BetterGiReleaseService
 
     public async Task<BetterGiReleaseInfo?> CheckLatestAsync(CancellationToken cancellationToken = default)
     {
-        Exception? primaryError = null;
-        foreach (var url in new[] { ProductDefaults.BetterGiReleaseApiUrl, GitHubApiUrl })
-        {
-            try
-            {
-                using var response = await _client.GetAsync(url, cancellationToken).ConfigureAwait(false);
-                response.EnsureSuccessStatusCode();
-                var release = await ParseAsync(response, cancellationToken).ConfigureAwait(false);
-                if (release is not null) return release;
-                throw new InvalidDataException("版本服务返回了无法识别的数据。");
-            }
-            catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or JsonException or InvalidDataException)
-            {
-                if (primaryError is null) primaryError = exception;
-                else throw new InvalidOperationException("BetterGI 官方版本服务暂时不可用，请稍后重试。", new AggregateException(primaryError, exception));
-            }
-        }
-        return null;
+        return await UpdateFeedReader.ReadWithFallbackAsync(_client, ProductDefaults.BetterGiReleaseApiUrl,
+            GitHubApiUrl, (json, _) => Parse(json), "BetterGI 官方版本服务暂时不可用，请稍后重试。", cancellationToken).ConfigureAwait(false);
     }
 
-    private static async Task<BetterGiReleaseInfo?> ParseAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    private static BetterGiReleaseInfo Parse(string json)
     {
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
-        if (!document.RootElement.TryGetProperty("tag_name", out var tagNode))
-        {
-            return null;
-        }
-        var tag = tagNode.GetString()?.Trim().TrimStart('v', 'V');
-        if (!Version.TryParse(tag, out var version))
-        {
-            return null;
-        }
-        var url = document.RootElement.TryGetProperty("html_url", out var urlNode)
-            ? urlNode.GetString()
-            : null;
+        using var document = UpdateFeedReader.ParseObject(json, "BetterGI 版本服务");
+        var tag = UpdateFeedReader.RequiredString(document.RootElement, "tag_name", "版本号").TrimStart('v', 'V').Split('-', '+')[0];
+        if (!Version.TryParse(tag, out var version)) throw new InvalidDataException("BetterGI 最新版本号无法识别。");
+        var url = UpdateFeedReader.OptionalString(document.RootElement, "html_url", "发布地址");
+        if (!string.IsNullOrWhiteSpace(url) && (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps))
+            throw new InvalidDataException("BetterGI 发布地址不是有效的 HTTPS 地址。");
         return new BetterGiReleaseInfo(version, string.IsNullOrWhiteSpace(url) ? ReleasesUrl : url);
     }
 }

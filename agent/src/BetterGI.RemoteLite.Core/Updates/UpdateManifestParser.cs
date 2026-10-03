@@ -6,12 +6,10 @@ public static class UpdateManifestParser
 {
     public static GitHubUpdateAsset? ParseLatest(string json, Version currentVersion)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(json);
         ArgumentNullException.ThrowIfNull(currentVersion);
-        using var document = JsonDocument.Parse(json);
+        using var document = UpdateFeedReader.ParseObject(json, "Remote 更新服务");
         var root = document.RootElement;
-        var versionText = root.GetProperty("version").GetString()?.Trim()
-            ?? throw new InvalidDataException("更新清单缺少版本号。");
+        var versionText = UpdateFeedReader.RequiredString(root, "version", "版本号");
         if (!Version.TryParse(versionText.Split('-', '+')[0], out var version))
         {
             throw new InvalidDataException("更新清单版本号无法识别。");
@@ -19,24 +17,19 @@ public static class UpdateManifestParser
         if (version <= currentVersion) return null;
 
         var expectedName = $"BetterGI.Remote.Setup.{version}.exe";
-        var fileName = root.GetProperty("fileName").GetString()?.Trim();
+        var fileName = UpdateFeedReader.RequiredString(root, "fileName", "安装包名称");
         if (!string.Equals(fileName, expectedName, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidDataException($"更新清单没有匹配的安装包 {expectedName}。");
         }
-        var downloadUrl = root.GetProperty("downloadUrl").GetString()?.Trim();
+        var downloadUrl = UpdateFeedReader.RequiredString(root, "downloadUrl", "下载地址");
         if (!Uri.TryCreate(downloadUrl, UriKind.Absolute, out var downloadUri) || downloadUri.Scheme != Uri.UriSchemeHttps)
         {
             throw new InvalidDataException("更新清单中的安装包地址不是有效的 HTTPS 地址。");
         }
-        var sha256 = root.GetProperty("sha256").GetString()?.Trim();
-        if (sha256?.Length != 64)
-        {
-            throw new InvalidDataException("更新清单缺少有效的 SHA-256 摘要。");
-        }
-        _ = Convert.FromHexString(sha256);
-        var tag = root.TryGetProperty("tag", out var tagElement) ? tagElement.GetString()?.Trim() : null;
-        var releaseUrl = root.TryGetProperty("releaseUrl", out var releaseElement) ? releaseElement.GetString()?.Trim() : null;
+        var sha256 = UpdateFeedReader.ValidDigest(UpdateFeedReader.RequiredString(root, "sha256", "校验摘要"));
+        var tag = UpdateFeedReader.OptionalString(root, "tag", "标签");
+        var releaseUrl = UpdateFeedReader.OptionalString(root, "releaseUrl", "发布地址");
         return new GitHubUpdateAsset(
             version,
             string.IsNullOrWhiteSpace(tag) ? $"v{version}" : tag,

@@ -30,11 +30,11 @@ BetterGI Remote 是一个轻量、无账号的 BetterGI 手机远程控制工具
 
 ## 下载
 
-当前版本：**v0.4.0**
+当前版本：**v0.4.1**
 
-- [从 BetterGI Remote 服务下载 Windows 安装包](https://bgiremote.163831.xyz/downloads/BetterGI.Remote.Setup.0.4.0.exe)
-- [GitHub Release 备用下载](https://github.com/Denght123/bettergi_remote/releases/latest/download/BetterGI.Remote.Setup.0.4.0.exe)
-- SHA-256：`ab1a83db75551150ef8f64cdf6c363388c13eb057fef84c008b41689b6f2c1d0`
+- [从 BetterGI Remote 服务下载 Windows 安装包](https://bgiremote.163831.xyz/downloads/BetterGI.Remote.Setup.0.4.1.exe)
+- [GitHub Release 备用下载](https://github.com/Denght123/bettergi_remote/releases/latest/download/BetterGI.Remote.Setup.0.4.1.exe)
+- SHA-256：`ca6ef8096e4b0b9ee1573f0d91da16a93330a1341bdea4f0ed7679aa3530d621`
 - 手机控制入口：[https://bgiremote.163831.xyz](https://bgiremote.163831.xyz)
 
 安装包目前没有购买商业代码签名证书，因此 Windows SmartScreen 可能显示“Windows 已保护你的电脑”。请确认文件来自本仓库 Release，并核对 SHA-256；然后点击“更多信息”→“仍要运行”。
@@ -137,6 +137,8 @@ Windows 小助手会在当前用户登录后自动启动并驻留系统托盘。
 
 ## 安全设计
 
+v0.4.1 修复更新检查收到 HTML/异常 JSON 后没有尝试备用源，以及 Windows 下载校验后移动文件时仍占用句柄的问题。详见 [v0.4.1 发布说明](docs/release-0.4.1.md)。
+
 - 无项目账号、无用户数据库，一台电脑绑定一个手机浏览器。
 - 使用 256 位随机绑定密钥，并通过 HKDF 派生双向独立的 AES-256-GCM 密钥。
 - 配置、命令、状态和报告均端到端加密；服务器只转发密文和在线连接元数据。
@@ -179,7 +181,7 @@ go test ./...
 
 ## 已验证项目
 
-- .NET 自动测试 66 项通过，Windows Agent Release 构建 0 警告、0 错误。
+- .NET 自动测试 81 项通过，Windows Agent Release 构建 0 警告、0 错误。
 - PWA 自动测试 12 项通过。
 - Go 中转测试全部通过。
 - BetterGI 0.64.0 实机完成“领取邮件”、启动原神和正常退出流程。

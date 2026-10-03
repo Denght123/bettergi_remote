@@ -8,33 +8,39 @@ public static class GitHubReleaseParser
 {
     public static GitHubUpdateAsset? ParseLatest(string json, Version currentVersion)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(json);
         ArgumentNullException.ThrowIfNull(currentVersion);
-        using var document = JsonDocument.Parse(json);
+        using var document = UpdateFeedReader.ParseObject(json, "GitHub 更新服务");
         var root = document.RootElement;
-        var tag = root.GetProperty("tag_name").GetString()?.Trim() ?? throw new InvalidDataException("GitHub Release 缺少版本号。");
+        var tag = UpdateFeedReader.RequiredString(root, "tag_name", "版本号");
         if (!Version.TryParse(tag.TrimStart('v', 'V').Split('-', '+')[0], out var version))
         {
             throw new InvalidDataException("GitHub Release 版本号无法识别。");
         }
         if (version <= currentVersion) return null;
         var expectedName = $"BetterGI.Remote.Setup.{version}.exe";
-        foreach (var asset in root.GetProperty("assets").EnumerateArray())
+        if (!root.TryGetProperty("assets", out var assets) || assets.ValueKind != JsonValueKind.Array)
+            throw new InvalidDataException("GitHub 版本信息缺少安装包列表。");
+        foreach (var asset in assets.EnumerateArray())
         {
-            if (!string.Equals(asset.GetProperty("name").GetString(), expectedName, StringComparison.OrdinalIgnoreCase)) continue;
-            var digest = asset.TryGetProperty("digest", out var digestElement) ? digestElement.GetString() : null;
+            if (asset.ValueKind != JsonValueKind.Object) continue;
+            var name = UpdateFeedReader.OptionalString(asset, "name", "安装包名称");
+            if (!string.Equals(name, expectedName, StringComparison.OrdinalIgnoreCase)) continue;
+            var digest = UpdateFeedReader.OptionalString(asset, "digest", "校验摘要");
             if (string.IsNullOrWhiteSpace(digest) || !digest.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase) || digest.Length != 71)
             {
                 throw new InvalidDataException("最新版安装包没有有效的 GitHub SHA-256 摘要，已拒绝自动更新。");
             }
-            _ = Convert.FromHexString(digest[7..]);
+            var sha256 = UpdateFeedReader.ValidDigest(digest[7..]);
+            var download = UpdateFeedReader.RequiredString(asset, "browser_download_url", "下载地址");
+            if (!Uri.TryCreate(download, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
+                throw new InvalidDataException("GitHub 安装包地址不是有效的 HTTPS 地址。");
             return new GitHubUpdateAsset(
                 version,
                 tag,
-                root.GetProperty("html_url").GetString() ?? string.Empty,
-                asset.GetProperty("browser_download_url").GetString() ?? throw new InvalidDataException("最新版缺少下载地址。"),
+                UpdateFeedReader.OptionalString(root, "html_url", "发布地址") ?? string.Empty,
+                uri.AbsoluteUri,
                 expectedName,
-                digest[7..].ToUpperInvariant());
+                sha256);
         }
         throw new InvalidDataException($"最新版没有找到受信任的安装包 {expectedName}。");
     }

@@ -205,6 +205,26 @@ func TestUpdateFilesAreServedOutsideTheSpa(t *testing.T) {
 	}
 }
 
+func TestMissingUpdateConfigurationNeverReturnsSpaHtml(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "index.html"), []byte("<html>frontend</html>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(NewServer(Options{}).Handler(root))
+	defer server.Close()
+	for _, path := range []string{"/updates/latest.json", "/downloads/BetterGI.Remote.Setup.0.4.1.exe"} {
+		response, err := http.Get(server.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, _ := io.ReadAll(response.Body)
+		_ = response.Body.Close()
+		if response.StatusCode != http.StatusNotFound || strings.Contains(string(body), "<html>") {
+			t.Fatalf("reserved route %s returned status %d and body %s", path, response.StatusCode, body)
+		}
+	}
+}
+
 func TestBetterGiReleaseProxyCachesValidatedResponse(t *testing.T) {
 	var calls atomic.Int32
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

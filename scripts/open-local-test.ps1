@@ -1,8 +1,8 @@
-param([ValidateRange(1024,65535)][int]$Port = 18080)
+param([ValidateRange(1024,65535)][int]$Port = 18080, [string]$AgentBuildDirectory)
 
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$buildRoot = Join-Path $projectRoot 'agent/src/BetterGI.RemoteLite.Agent/bin/Release/net8.0-windows'
+$buildRoot = if ($AgentBuildDirectory) { [IO.Path]::GetFullPath($AgentBuildDirectory) } else { Join-Path $projectRoot 'agent/src/BetterGI.RemoteLite.Agent/bin/Release/net8.0-windows' }
 $agentExecutable = Join-Path $buildRoot 'BetterGI.RemoteLite.Agent.exe'
 $relayExecutable = Join-Path $projectRoot 'artifacts/relay-windows-x64.exe'
 $testProfile = Join-Path $projectRoot '.cache/interactive-test'

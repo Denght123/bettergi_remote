@@ -18,6 +18,7 @@ internal sealed class AgentApplicationContext : ApplicationContext
     private readonly UpdateService _updates = new();
     private readonly BetterGiReleaseService _betterGiUpdates = new();
     private bool _exiting;
+    private bool _checkingUpdate;
     private SettingsForm? _settingsForm;
     private long _lastSettingsOpenTick;
 
@@ -242,6 +243,12 @@ internal sealed class AgentApplicationContext : ApplicationContext
 
     private async Task<bool> CheckForUpdatesAsync(bool manual)
     {
+        if (_checkingUpdate)
+        {
+            if (manual) MessageBox.Show("正在检查或下载更新，请稍候。", "检查更新", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return false;
+        }
+        _checkingUpdate = true;
         try
         {
             var update = await _updates.CheckAsync();
@@ -251,13 +258,13 @@ internal sealed class AgentApplicationContext : ApplicationContext
                 if (manual) MessageBox.Show($"当前已是最新版 {ProductDefaults.ProductVersion}。", "检查更新", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return false;
             }
-            if (string.Equals(_runtime?.GetStatus().State, "running", StringComparison.OrdinalIgnoreCase))
+            if (_runtime?.GetStatus().State is "starting" or "running" or "stopping" or "updating")
             {
                 if (manual) MessageBox.Show("当前任务仍在执行。请等待任务结束后再安装更新。", "暂不能更新", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return false;
             }
             var answer = MessageBox.Show(
-                $"发现 BetterGI Remote {update.Version}。\r\n\r\n点击“是”将从官方 GitHub Release 下载、校验并安装。",
+                $"发现 BetterGI Remote {update.Version}。\r\n\r\n点击“是”将从官方更新服务下载、校验并安装。",
                 "发现新版本",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Information);
@@ -267,6 +274,8 @@ internal sealed class AgentApplicationContext : ApplicationContext
             var reporter = new Progress<int>(progress.SetProgress);
             var installer = await _updates.DownloadAsync(update, reporter);
             progress.Close();
+            if (_runtime?.GetStatus().State is "starting" or "running" or "stopping" or "updating")
+                throw new InvalidOperationException("安装包已下载，但当前正在执行任务或保存配置。请等待结束后再次检查更新。");
             UpdateService.LaunchInstaller(installer);
             return true;
         }
@@ -275,6 +284,7 @@ internal sealed class AgentApplicationContext : ApplicationContext
             if (manual) MessageBox.Show("检查或安装更新失败：\r\n" + exception.Message, "检查更新", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return false;
         }
+        finally { _checkingUpdate = false; }
     }
 
     private void ScheduleBetterGiUpdateCheck()

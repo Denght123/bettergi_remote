@@ -102,7 +102,7 @@ public sealed record AgentStatusDto(
     string? Message = null,
     DateTimeOffset? BindingExpiresAt = null,
     int? BindingDaysRemaining = null,
-    string AgentVersion = "0.4.0",
+    string AgentVersion = "0.4.1",
     bool BetterGiCompatibilityVerified = false,
     string? BetterGiLatestVersion = null,
     bool BetterGiUpdateAvailable = false,

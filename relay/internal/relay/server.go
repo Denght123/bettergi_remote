@@ -136,6 +136,17 @@ func (s *Server) Handler(webRoot string) http.Handler {
 		mux.HandleFunc("/updates/latest.json", s.handleUpdateManifest)
 		mux.HandleFunc("/downloads/", s.handleUpdateDownload)
 	}
+	// Reserved machine endpoints must never fall through to the SPA's HTML shell.
+	mux.HandleFunc("/updates/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"error":"updates_unavailable"}`))
+	})
+	if s.options.UpdateRoot == "" {
+		mux.HandleFunc("/downloads/", func(w http.ResponseWriter, r *http.Request) {
+			http.NotFound(w, r)
+		})
+	}
 
 	if webRoot != "" {
 		mux.Handle("/", spaHandler(webRoot))

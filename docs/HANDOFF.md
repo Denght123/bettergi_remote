@@ -53,4 +53,6 @@
 - 全量验证：.NET 81、PWA 12、Go 全部通过，Windows 构建零警告/零错误。实际网络检查确认本地控制地址与正式更新地址分离。
 - 补丁包 artifacts/BetterGI.Remote.Setup.0.4.1.exe，66409287 字节，SHA-256 ca6ef8096e4b0b9ee1573f0d91da16a93330a1341bdea4f0ed7679aa3530d621。
 - 本地自动安装/启动命令被自动审批拒绝，未执行。本机正式安装仍为 0.3.5，需手动使用已校验补丁覆盖安装；不要宣称已更新本机。
-- 正在发布 GitHub/VPS 补丁，最终状态需核对线上最新清单。
+- v0.4.1 GitHub Release、版本标签与 VPS 补丁部署完成。发布代码提交 6901d7334ad5bea00d70e776adf4ff946e2cba39，GitHub 两次 CI 均 success。
+- 公网清单为 0.4.1、下载 SHA-256 与 GitHub 摘要一致；healthz 正常，Nginx 配置通过，SW v10，保留更新路径缺失返回 404，Relay 仅监听 127.0.0.1:8080。
+- VPS 备份 /opt/bettergi-remote-lite/backups/20261003T163845Z-0.4.1。本地自动覆盖安装与启动命令均未获准执行；本机安装依旧为 0.3.5，需要用户手动运行补丁安装器，并退出旧的本地测试客户端。

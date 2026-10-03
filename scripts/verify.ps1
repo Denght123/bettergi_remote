@@ -1,4 +1,6 @@
+param([string]$BuildOutputDirectory)
 $ErrorActionPreference = "Stop"
+[string[]]$buildArguments = if ($BuildOutputDirectory) { @("-p:BaseOutputPath=$([IO.Path]::GetFullPath($BuildOutputDirectory).TrimEnd('\') + '\')") } else { @() }
 $root = Split-Path -Parent $PSScriptRoot
 $cache = Join-Path $root ".cache"
 New-Item -ItemType Directory -Force $cache | Out-Null
@@ -32,9 +34,9 @@ try {
 
 Push-Location (Join-Path $root "agent")
 try {
-    dotnet test BetterGI.RemoteLite.sln --configuration Release
+    dotnet test BetterGI.RemoteLite.sln --configuration Release @buildArguments
     if ($LASTEXITCODE -ne 0) { throw ".NET tests failed with exit code $LASTEXITCODE." }
-    dotnet build BetterGI.RemoteLite.sln --configuration Release --no-restore
+    dotnet build BetterGI.RemoteLite.sln --configuration Release --no-restore @buildArguments
     if ($LASTEXITCODE -ne 0) { throw ".NET agent build failed with exit code $LASTEXITCODE." }
 } finally {
     Pop-Location

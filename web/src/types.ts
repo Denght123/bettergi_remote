@@ -68,6 +68,8 @@ export interface AgentStatus {
   betterGiCompatibilityVerified: boolean;
   betterGiLatestVersion?: string;
   betterGiUpdateAvailable: boolean;
+  currentProgress?: RunProgress;
+  capabilities?: string[];
 }
 
 export interface TaskItem {
@@ -82,7 +84,7 @@ export type EditableFieldType = 'text' | 'number' | 'toggle' | 'select' | 'multi
 
 export interface EditableField {
   path: string;
-  scope: 'oneDragon' | 'global';
+  scope: 'oneDragon' | 'global' | 'scriptGroup';
   group: string;
   label: string;
   type: EditableFieldType;
@@ -100,6 +102,9 @@ export interface RemoteConfig {
   fields: EditableField[];
   completionAction: string;
   readAt: string;
+  applicationNotice?: string;
+  nextFieldOffset?: number;
+  totalFields?: number;
 }
 
 export interface RunProgress {
@@ -110,12 +115,20 @@ export interface RunProgress {
   totalTasks: number;
   message?: string;
   observedAt: string;
+  currentStep?: string;
+  currentLocation?: string;
+  tasks?: RunTaskResult[];
 }
 
 export interface RunTaskResult {
   name: string;
   state: string;
   message?: string;
+  step?: string;
+  location?: string;
+  rewards?: Record<string, number>;
+  pickupObservations?: Record<string, number>;
+  woodEstimates?: Record<string, number>;
 }
 
 export interface RunReport {
@@ -133,4 +146,9 @@ export interface RunReport {
   dailyRewards?: Record<string, number>;
   dailyRewardDate?: string;
   rewardRecognitionStatus?: string;
+  pickupObservations?: Record<string, number>;
+  woodEstimates?: Record<string, number>;
+  lootCoverage?: string;
+  nextLootOffset?: number;
+  totalLootEntries?: number;
 }

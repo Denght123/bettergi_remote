@@ -102,10 +102,12 @@ public sealed record AgentStatusDto(
     string? Message = null,
     DateTimeOffset? BindingExpiresAt = null,
     int? BindingDaysRemaining = null,
-    string AgentVersion = "0.3.5",
+    string AgentVersion = "0.4.0",
     bool BetterGiCompatibilityVerified = false,
     string? BetterGiLatestVersion = null,
-    bool BetterGiUpdateAvailable = false);
+    bool BetterGiUpdateAvailable = false,
+    RunProgressDto? CurrentProgress = null,
+    IReadOnlyList<string>? Capabilities = null);
 
 public sealed record TaskItemDto(string Id, string Name, bool Enabled, bool IsCustom, int Order);
 
@@ -136,7 +138,10 @@ public sealed record RemoteConfigDto(
     IReadOnlyList<TaskItemDto> Tasks,
     IReadOnlyList<EditableFieldDto> Fields,
     string CompletionAction,
-    DateTimeOffset ReadAt);
+    DateTimeOffset ReadAt,
+    string? ApplicationNotice = null,
+    int? NextFieldOffset = null,
+    int? TotalFields = null);
 
 public sealed record RunProgressDto(
     string RunId,
@@ -145,9 +150,20 @@ public sealed record RunProgressDto(
     int CompletedTasks,
     int TotalTasks,
     string? Message,
-    DateTimeOffset ObservedAt);
+    DateTimeOffset ObservedAt,
+    string? CurrentStep = null,
+    string? CurrentLocation = null,
+    IReadOnlyList<RunTaskResult>? Tasks = null);
 
-public sealed record RunTaskResult(string Name, string State, string? Message = null);
+public sealed record RunTaskResult(
+    string Name,
+    string State,
+    string? Message = null,
+    string? Step = null,
+    string? Location = null,
+    IReadOnlyDictionary<string, int>? Rewards = null,
+    IReadOnlyDictionary<string, int>? PickupObservations = null,
+    IReadOnlyDictionary<string, int>? WoodEstimates = null);
 
 public sealed record RunReportDto(
     string RunId,
@@ -163,4 +179,9 @@ public sealed record RunReportDto(
     string ParserVersion = "adaptive-v2",
     IReadOnlyDictionary<string, int>? DailyRewards = null,
     string? DailyRewardDate = null,
-    string? RewardRecognitionStatus = null);
+    string? RewardRecognitionStatus = null,
+    IReadOnlyDictionary<string, int>? PickupObservations = null,
+    IReadOnlyDictionary<string, int>? WoodEstimates = null,
+    string? LootCoverage = null,
+    int? NextLootOffset = null,
+    int? TotalLootEntries = null);

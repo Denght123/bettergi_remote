@@ -71,5 +71,17 @@ Push:
 {"type":"push","event":"status.changed","data":{}}
 ```
 
-Allowed methods are `pair.request`, `status.get`, `config.get`, `config.update`, `task.start`, `task.stop`, and `report.latest`.
+Allowed methods are `pair.request`, `status.get`, `config.get`, `config.sync`, `config.update`, `task.start`, `task.stop`, and `report.latest`.
+
+## Optional expanded configuration and reports
+
+Protocol v1 encryption, binding, replay protection and the 48 KiB plaintext limit remain unchanged.
+
+- `config.get` and `config.sync` accept optional `offset`, `limit` and `revision`. Results may contain `nextFieldOffset` and `totalFields`; subsequent pages use the first page's revision. A five-minute PC snapshot keeps the read consistent. Save checks the actual participating files again, so an outdated snapshot cannot overwrite a desktop edit.
+- `config.update` still accepts `baseRevision`, `tasks`, and `values`. New phones send changed values only. Config replies are paged and use scopes `oneDragon`, `global`, and `scriptGroup`. Metadata comes from the PC's reviewed catalog and installed script settings; RPC never accepts a file path, code or arbitrary new setting.
+- `status.get` and `status.changed` may contain `currentProgress`. Progress adds `currentStep`, `currentLocation` and task state rows, allowing reconnecting phones to recover the active run.
+- `report.latest` accepts `offset`, `limit` and `runId`; results may contain `nextLootOffset` and `totalLootEntries`. Pages must belong to the same run. `run.completed` carries the first page, then the phone retrieves the rest.
+- `rewards`/`dailyRewards` are reward-recognition quantities; `pickupObservations` counts logged interactions; `woodEstimates` is an estimate. These sources must not be summed into an inventory-gain total. Raw `logExcerpt` stays in PC report files rather than being sent in the mobile result.
+
+Existing phones can read the first configuration/report page but need the updated PWA to use the expanded catalog and complete paging. The new phone accepts old replies with no paging or progress fields. Release the client and PWA together to expose the new features consistently.
 

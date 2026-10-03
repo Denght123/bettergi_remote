@@ -48,6 +48,7 @@ export class RemoteClient {
       method,
       params,
     };
+    if (encoder.encode(JSON.stringify(message)).byteLength > 48 * 1024) throw new Error('这次修改的内容过多，请分批保存设置。');
     const envelope = await encryptMessage(message, requestId, this.pairing.phoneToPcKey);
     const response = new Promise<T>((resolve, reject) => {
       const timer = window.setTimeout(() => {

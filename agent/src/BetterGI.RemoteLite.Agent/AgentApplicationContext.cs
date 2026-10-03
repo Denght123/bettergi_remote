@@ -42,7 +42,7 @@ internal sealed class AgentApplicationContext : ApplicationContext
         _tray = new NotifyIcon
         {
             Icon = SystemIcons.Application,
-            Text = "BetterGI Remote",
+            Text = Environment.GetEnvironmentVariable("BGRL_LOCAL_TEST") == "1" ? "BetterGI Remote · 本地测试" : "BetterGI Remote",
             Visible = true,
             ContextMenuStrip = menu,
         };

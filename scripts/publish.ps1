@@ -1,4 +1,6 @@
+param([string]$BuildOutputDirectory)
 $ErrorActionPreference = "Stop"
+[string[]]$buildArguments = if ($BuildOutputDirectory) { @("-p:BaseOutputPath=$([IO.Path]::GetFullPath($BuildOutputDirectory).TrimEnd('\') + '\')") } else { @() }
 $root = Split-Path -Parent $PSScriptRoot
 $artifacts = Join-Path $root "artifacts"
 $cache = Join-Path $root ".cache"
@@ -19,7 +21,7 @@ dotnet publish (Join-Path $root "agent/src/BetterGI.RemoteLite.Agent/BetterGI.Re
     --self-contained true `
     -p:PublishSingleFile=true `
     -p:EnableCompressionInSingleFile=true `
-    --output (Join-Path $artifacts "agent-win-x64")
+    --output (Join-Path $artifacts "agent-win-x64") @buildArguments
 if ($LASTEXITCODE -ne 0) { throw ".NET publish failed with exit code $LASTEXITCODE." }
 
 Push-Location (Join-Path $root "web")

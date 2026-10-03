@@ -4,6 +4,117 @@ namespace BetterGI.RemoteLite.Core.Tests;
 
 public sealed class BetterGiLogParserTests
 {
+    [Theory]
+    [InlineData("任务中断:任务被取消")]
+    [InlineData("任务被取消，退出执行")]
+    [InlineData("一条龙在启动阶段被取消")]
+    [InlineData("取消执行配置组:任务被取消")]
+    public void OfficialManualStopLogsStopTheRunAndSkipRemainingTasks(string marker)
+    {
+        var start = DateTimeOffset.UtcNow;
+        var parser = new BetterGiLogParser("manual-stop", start, ["领取邮件", "自动秘境", "采集组"]);
+        parser.AcceptLine("一条龙任务执行: 1/2", start);
+        var update=parser.AcceptLine(marker,start.AddSeconds(2));
+        Assert.True(update.IsTerminal);
+        parser.AcceptLine("一条龙和配置组任务结束",start.AddSeconds(3));
+        var report=parser.Finish("success",start.AddSeconds(4));
+        Assert.Equal("stopped",report.Status);
+        Assert.Equal("stopped",report.Tasks[0].State);
+        Assert.All(report.Tasks.Skip(1),task=>Assert.Equal("skipped",task.State));
+        Assert.Empty(report.Errors);
+    }
+
+    [Fact]
+    public void TracksDiverseMaterialNamesBeyondThePreviousSmallRewardLimit()
+    {
+        var start = DateTimeOffset.UtcNow;
+        var parser = new BetterGiLogParser("diverse-materials", start, ["采集组"]);
+        parser.AcceptLine("配置组任务执行: 1/1", start);
+        for(var i=0;i<200;i++) parser.AcceptLine($"本轮奖励识别结果 采集材料{i} x2", start);
+        var report=parser.Finish("success",start);
+        Assert.Equal(200, report.Rewards.Count);
+        Assert.Equal(2, report.Rewards["采集材料199"]);
+        Assert.Equal(200, report.Tasks[0].Rewards!.Count);
+    }
+
+    [Fact]
+    public void ConvertsScriptStackLocationToAReadableLineWithoutExposingTheTrace()
+    {
+        var start = DateTimeOffset.UtcNow;
+        var parser = new BetterGiLogParser("js", start, ["采集组"]);
+        parser.AcceptLine("配置组任务执行: 1/1", start);
+        parser.AcceptLine("→ 开始执行JS脚本: \"采集调度\"", start);
+        parser.AcceptLine("[ERR] 执行脚本时发生异常", start);
+        parser.AcceptLine("    at ScriptEngine.execute (main.js:18:6)", start);
+        var report = parser.Finish("failed", start);
+        Assert.Equal("采集调度 · 第 18 行", report.Tasks[0].Location);
+        Assert.Contains("第 18 行", report.Errors[0]);
+        Assert.DoesNotContain("ScriptEngine", report.Errors[0]);
+    }
+
+    [Fact]
+    public void ReportsNamedScriptLocationAndReadableFailureWithIndependentCounters()
+    {
+        var start = DateTimeOffset.UtcNow;
+        var parser = new BetterGiLogParser("route", start, ["领取邮件", "每日采集组", "自动秘境"]);
+        parser.AcceptLine("一条龙任务执行: 1/2", start);
+        parser.AcceptLine("配置组任务执行: 1/1", start.AddSeconds(1));
+        parser.AcceptLine("配置组 \"每日采集组\" 加载完成，准备执行", start.AddSeconds(2));
+        var progress = parser.AcceptLine("→ 开始执行地图追踪任务: \"清心采集路线.json\"", start.AddSeconds(3)).Progress;
+        Assert.Equal("每日采集组", progress!.CurrentTask);
+        Assert.Equal("清心采集路线.json", progress.CurrentLocation);
+        Assert.Equal("沿路线移动与采集", progress.CurrentStep);
+        parser.AcceptLine("[12:00:00.123] [ERR] [PC:S1:P123:T4] BetterGenshinImpact.GameTask.AutoPathing.PathExecutor", start);
+        parser.AcceptLine("路径点执行超时", start.AddSeconds(4));
+        parser.AcceptLine("   at BetterGenshinImpact.GameTask.AutoPathing.PathExecutor.Run()", start);
+        parser.AcceptLine("一条龙任务执行: 2/2", start.AddSeconds(5));
+        parser.AcceptLine("一条龙和配置组任务结束", start.AddSeconds(6));
+        var report = parser.Finish("success", start.AddSeconds(7));
+        Assert.Equal("failed", report.Status);
+        Assert.Equal("failed", report.Tasks[1].State);
+        Assert.Equal("清心采集路线.json", report.Tasks[1].Location);
+        Assert.Contains("每日采集组", report.Errors[0]);
+        Assert.Contains("超时", report.Errors[0]);
+        Assert.DoesNotContain(report.Errors, error => error.Contains("Exception") || error.Contains("PathExecutor"));
+    }
+
+    [Fact]
+    public void KeepsMaterialsWoodEstimatesAndPickupAttemptsSeparate()
+    {
+        var start = DateTimeOffset.UtcNow;
+        var parser = new BetterGiLogParser("materials", start, ["采集与伐木"]);
+        parser.AcceptLine("配置组任务执行: 1/1", start);
+        parser.AcceptLine("自动秘境：本轮奖励识别结果 \"清心 x3, 自由的教导 x4, 摩拉 x1000\"", start);
+        parser.AcceptLine("交互或拾取：\"薄荷\"", start);
+        parser.AcceptLine("交互或拾取：\"薄荷\"", start);
+        parser.AcceptLine("自动伐木，启动", start);
+        parser.AcceptLine("木材杉木累积获取数量：3", start);
+        parser.AcceptLine("木材杉木累积获取数量：6", start);
+        parser.AcceptLine("木材杉木累积获取数量：6", start);
+        var report = parser.Finish("success", start.AddMinutes(2));
+        Assert.Equal(3, report.Rewards["清心"]);
+        Assert.Equal(4, report.Rewards["自由的教导"]);
+        Assert.Equal(2, report.PickupObservations!["薄荷"]);
+        Assert.Equal(6, report.WoodEstimates!["杉木"]);
+        Assert.False(report.Rewards.ContainsKey("薄荷"));
+        Assert.False(report.Rewards.ContainsKey("杉木"));
+        Assert.Equal(report.Rewards, report.Tasks[0].Rewards);
+        Assert.Contains("不代表实际入包", report.LootCoverage);
+    }
+
+    [Fact]
+    public void WoodEstimateResetsOnlyAtASeparateWoodRun()
+    {
+        var start = DateTimeOffset.UtcNow;
+        var parser = new BetterGiLogParser("wood", start, ["伐木组"]);
+        parser.AcceptLine("配置组任务执行: 1/1", start);
+        parser.AcceptLine("自动伐木，启动", start);
+        parser.AcceptLine("木材杉木累积获取数量：9", start);
+        parser.AcceptLine("自动伐木，启动", start);
+        parser.AcceptLine("木材杉木累积获取数量：3", start);
+        Assert.Equal(12, parser.Finish("success", start).WoodEstimates!["杉木"]);
+    }
+
     [Fact]
     public void ParsesSuccessfulRunAndRewards()
     {

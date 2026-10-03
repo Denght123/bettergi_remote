@@ -21,14 +21,27 @@ internal sealed class AgentRuntime : IAsyncDisposable
     private Task? _statusTask;
     private DateTimeOffset _pairingAllowedUntil;
     private string? _lastStatusJson;
+    private RunProgressDto? _latestProgress;
+    private RunReportDto? _latestReport;
+    private RemoteConfigDto? _configSnapshot;
+    private DateTimeOffset _configSnapshotExpiresAt;
 
     public AgentRuntime(AgentSettingsStore settingsStore, Func<PairRequest, Task<bool>> confirmPairing)
     {
         _settingsStore = settingsStore;
         _confirmPairing = confirmPairing;
         _controller = new BetterGiController(settingsStore);
-        _controller.ProgressChanged += (_, progress) => _ = SendPushSafeAsync(PushEvents.RunProgress, progress);
-        _controller.RunCompleted += (_, report) => _ = SendPushSafeAsync(PushEvents.RunCompleted, report);
+        _controller.ProgressChanged += (_, progress) =>
+        {
+            _latestProgress = ReportPaging.Progress(progress);
+            _ = SendPushSafeAsync(PushEvents.RunProgress, _latestProgress);
+        };
+        _controller.RunCompleted += (_, report) =>
+        {
+            _latestProgress = null;
+            _latestReport = report;
+            _ = SendPushSafeAsync(PushEvents.RunCompleted, ReportPaging.Page(report));
+        };
     }
 
     public bool PeerOnline => _relay?.PeerOnline ?? false;
@@ -70,6 +83,8 @@ internal sealed class AgentRuntime : IAsyncDisposable
             BindingExpiresAt = settings.BindingExpiresAt,
             BindingDaysRemaining = remaining,
             AgentVersion = ProductDefaults.ProductVersion,
+            CurrentProgress = status.ActiveRunId == _latestProgress?.RunId ? _latestProgress : null,
+            Capabilities = ["runningStart", "desktopConfig", "detailedProgress", "lootSources", "paging"],
         };
     }
 
@@ -113,12 +128,12 @@ internal sealed class AgentRuntime : IAsyncDisposable
             return request.Method switch
             {
                 RpcMethods.StatusGet => Success(request.RequestId, GetStatus()),
-                RpcMethods.ConfigGet => Success(request.RequestId, await _controller.CreateConfigStore().LoadAsync(cancellationToken).ConfigureAwait(false)),
-                RpcMethods.ConfigSync => Success(request.RequestId, await _controller.SyncConfigAsync(cancellationToken).ConfigureAwait(false)),
+                RpcMethods.ConfigGet => Success(request.RequestId, await ReadConfigPageAsync(request, false, cancellationToken).ConfigureAwait(false)),
+                RpcMethods.ConfigSync => Success(request.RequestId, await ReadConfigPageAsync(request, true, cancellationToken).ConfigureAwait(false)),
                 RpcMethods.ConfigUpdate => Success(request.RequestId, await UpdateConfigAsync(request, cancellationToken).ConfigureAwait(false)),
                 RpcMethods.TaskStart => Success(request.RequestId, await StartTaskAsync(request, cancellationToken).ConfigureAwait(false)),
                 RpcMethods.TaskStop => Success(request.RequestId, await StopTaskAsync(request, cancellationToken).ConfigureAwait(false)),
-                RpcMethods.ReportLatest => Success(request.RequestId, await _controller.Reports.LatestAsync(cancellationToken).ConfigureAwait(false)),
+                RpcMethods.ReportLatest => Success(request.RequestId, await ReadReportPageAsync(request, cancellationToken).ConfigureAwait(false)),
                 _ => Failure(request.RequestId, "method_not_allowed", "操作不受支持。"),
             };
         }
@@ -138,6 +153,49 @@ internal sealed class AgentRuntime : IAsyncDisposable
         {
             return Failure(request.RequestId, "invalid_request", exception.Message);
         }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return Failure(request.RequestId, "configuration_unavailable", "无法读取或保存电脑配置。请检查 BetterGI 目录权限，重新同步后再试。", true);
+        }
+        catch (Exception exception) when (exception is JsonException or ArgumentException)
+        {
+            return Failure(request.RequestId, "invalid_request", "提交的设置格式不正确。请重新同步电脑配置后再保存。");
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            return Failure(request.RequestId, "operation_failed", "电脑未能完成这次操作。请重新同步后再试；仍然失败时请检查电脑端的运行状态。", true);
+        }
+    }
+
+    private async Task<RemoteConfigDto> ReadConfigPageAsync(RpcRequestMessage request, bool sync, CancellationToken cancellationToken)
+    {
+        var value = request.Params;
+        var offset = value.ValueKind == JsonValueKind.Object && value.TryGetProperty("offset", out var o) ? o.GetInt32() : 0;
+        var limit = value.ValueKind == JsonValueKind.Object && value.TryGetProperty("limit", out var l) ? l.GetInt32() : 128;
+        var revision = value.ValueKind == JsonValueKind.Object && value.TryGetProperty("revision", out var r) ? r.GetString() : null;
+        RemoteConfigDto config;
+        if (!sync && offset > 0 && _configSnapshot is { } snapshot && snapshot.Revision == revision && DateTimeOffset.UtcNow < _configSnapshotExpiresAt)
+            config = snapshot;
+        else
+        {
+            config = sync
+                ? await _controller.SyncConfigAsync(cancellationToken).ConfigureAwait(false)
+                : await _controller.CreateConfigStore().LoadAsync(cancellationToken).ConfigureAwait(false);
+            _configSnapshot = config;
+            _configSnapshotExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5);
+        }
+        return ConfigPaging.Page(config, offset, limit, revision);
+    }
+
+    private async Task<RunReportDto?> ReadReportPageAsync(RpcRequestMessage request, CancellationToken cancellationToken)
+    {
+        var report = _latestReport ?? await _controller.Reports.LatestAsync(cancellationToken).ConfigureAwait(false);
+        if (report is null) return null;
+        var value = request.Params;
+        var offset = value.ValueKind == JsonValueKind.Object && value.TryGetProperty("offset", out var o) ? o.GetInt32() : 0;
+        var limit = value.ValueKind == JsonValueKind.Object && value.TryGetProperty("limit", out var l) ? l.GetInt32() : 24;
+        var runId = value.ValueKind == JsonValueKind.Object && value.TryGetProperty("runId", out var r) ? r.GetString() : null;
+        return ReportPaging.Page(report, offset, limit, runId);
     }
 
     private async Task<PairResponse> HandlePairRequestAsync(RpcRequestMessage request)
@@ -194,7 +252,11 @@ internal sealed class AgentRuntime : IAsyncDisposable
         }
         var update = request.Params.Deserialize<ConfigUpdateRequest>(RemoteJson.Options)
             ?? throw new InvalidDataException("配置提交无效。");
-        return await _controller.CreateConfigStore().UpdateAsync(update, cancellationToken).ConfigureAwait(false);
+        var config = await _controller.MutateConfigurationAsync(
+            token => _controller.CreateConfigStore().UpdateAsync(update, token), cancellationToken).ConfigureAwait(false);
+        _configSnapshot = config;
+        _configSnapshotExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5);
+        return ConfigPaging.Page(config, limit: 128);
     }
 
     private async Task<TaskAccepted> StartTaskAsync(RpcRequestMessage request, CancellationToken cancellationToken)

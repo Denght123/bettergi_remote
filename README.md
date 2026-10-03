@@ -30,11 +30,11 @@ BetterGI Remote 是一个轻量、无账号的 BetterGI 手机远程控制工具
 
 ## 下载
 
-当前版本：**v0.3.5**
+当前版本：**v0.4.0**
 
-- [从 BetterGI Remote 服务下载 Windows 安装包](https://bgiremote.163831.xyz/downloads/BetterGI.Remote.Setup.0.3.5.exe)
-- [GitHub Release 备用下载](https://github.com/Denght123/bettergi_remote/releases/latest/download/BetterGI.Remote.Setup.0.3.5.exe)
-- SHA-256：`93d0bcaf680432d2464b8c1c150685834dd59119357c959eb6b7a461669e2371`
+- [从 BetterGI Remote 服务下载 Windows 安装包](https://bgiremote.163831.xyz/downloads/BetterGI.Remote.Setup.0.4.0.exe)
+- [GitHub Release 备用下载](https://github.com/Denght123/bettergi_remote/releases/latest/download/BetterGI.Remote.Setup.0.4.0.exe)
+- SHA-256：`ab1a83db75551150ef8f64cdf6c363388c13eb057fef84c008b41689b6f2c1d0`
 - 手机控制入口：[https://bgiremote.163831.xyz](https://bgiremote.163831.xyz)
 
 安装包目前没有购买商业代码签名证书，因此 Windows SmartScreen 可能显示“Windows 已保护你的电脑”。请确认文件来自本仓库 Release，并核对 SHA-256；然后点击“更多信息”→“仍要运行”。
@@ -44,7 +44,7 @@ BetterGI Remote 是一个轻量、无账号的 BetterGI 手机远程控制工具
 - Windows 10/11 x64。
 - 官方 BetterGI 0.64.x，或通过配置结构兼容探测的更高版本。
 - 电脑已开机、Windows 已登录且未锁屏。
-- 开始任务和保存配置前，BetterGI 必须处于关闭状态。
+- BetterGI 可以保持打开；客户端会确认空闲后复用适用入口，或正常重启载入配置。正在执行任务时不能修改配置。
 - 手机使用现代 Android/iPhone 浏览器，微信内置浏览器也可用于首次扫码。
 
 ## 三步开始使用
@@ -61,6 +61,7 @@ Windows 小助手会在当前用户登录后自动启动并驻留系统托盘。
 
 - 查看电脑在线、Windows 锁定、BetterGI、原神和当前任务状态。
 - 修改任务开关、拖动排序、保存配置。
+- 调整对应的全局任务参数、已安装脚本调度和 JS 设置，使用分类与搜索查找参数。
 - 点击“立即同步”读取电脑端源一条龙配置；电脑新增任务后会安全合并到远程配置末尾，未知任务仍只允许开关和排序。
 - 启动当前“远程每日”一条龙任务。
 - 通过预先设定的 BetterGI 取消快捷键停止远程任务。
@@ -124,6 +125,16 @@ Windows 小助手会在当前用户登录后自动启动并驻留系统托盘。
 - 桌面页眉改用兼容 JPEG，并在图片损坏或缺失时安全回退为纯色背景。
 - 安装向导增加可选的“创建桌面快捷方式”勾选项，默认不勾选。
 
+## v0.4.0 配置同步、运行状态与物品报告
+
+- BetterGI 已打开时不再要求先手动关闭，确认空闲后复用可验证的一条龙快捷键，或正常重启后自动执行。
+- 手机新增全局设置、脚本调度与 JS 参数分类，并保护未保存的修改；配置采用同修订快照分页读取，保存时再次核验真实文件。
+- 实时展示当前任务、步骤、脚本/路线位置与中文失败原因；停止后正确标记跳过的任务。
+- 任意已识别奖励名称均可汇总。木材估算、交互/拾取次数与真实奖励数量分开呈现，不伪造背包新增数量。
+- 新网页与旧电脑端交互时提示升级，原有绑定无需重新创建。
+
+发布说明见 [v0.4.0](docs/release-0.4.0.md)，完整范围、上游限制与验证记录见 [功能优化说明](docs/feature-upgrade-2026-10-03.md)。
+
 ## 安全设计
 
 - 无项目账号、无用户数据库，一台电脑绑定一个手机浏览器。
@@ -132,7 +143,7 @@ Windows 小助手会在当前用户登录后自动启动并驻留系统托盘。
 - 中转服务不保存业务数据、不提供离线命令队列，手机离线时不能提交新命令。
 - 电脑端密钥由 Windows DPAPI 保护，手机密钥保存在浏览器 IndexedDB 中。
 - 不开放任意文件访问、程序路径、Shell、桌面控制、通用按键、进程强杀或远程开机。
-- BetterGI 已打开、Windows 锁屏、配置冲突或版本不兼容时拒绝危险操作。
+- BetterGI 有活动任务、Windows 锁屏、配置冲突或版本不兼容时拒绝危险操作；不能确认空闲时也不会强行关闭。
 
 ## 源码结构
 
@@ -168,8 +179,8 @@ go test ./...
 
 ## 已验证项目
 
-- .NET 自动测试 32 项通过，Windows Agent Release 构建 0 警告、0 错误。
-- PWA 自动测试 6 项通过。
+- .NET 自动测试 66 项通过，Windows Agent Release 构建 0 警告、0 错误。
+- PWA 自动测试 12 项通过。
 - Go 中转测试全部通过。
 - BetterGI 0.64.0 实机完成“领取邮件”、启动原神和正常退出流程。
 - 线上模拟 20 对设备、40 条 WebSocket 同时连接通过。

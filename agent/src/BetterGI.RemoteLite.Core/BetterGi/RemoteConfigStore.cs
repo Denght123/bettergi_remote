@@ -7,7 +7,7 @@ using BetterGI.RemoteLite.Protocol;
 
 namespace BetterGI.RemoteLite.BetterGi;
 
-public sealed class RemoteConfigStore
+public sealed partial class RemoteConfigStore
 {
     public const string DefaultRemoteConfigName = "远程每日";
     public const string FixedCompletionAction = "关闭游戏和软件";
@@ -164,7 +164,8 @@ public sealed class RemoteConfigStore
                 await BackupAndWriteAsync(RemoteConfigPath, updated, cancellationToken).ConfigureAwait(false);
                 remoteBytes = updated;
             }
-            return BuildDto(remote, ParseObject(globalBytes, GlobalConfigPath), ComputeRevision(remoteBytes, globalBytes));
+            var scheduler = await LoadSchedulerAsync(cancellationToken).ConfigureAwait(false);
+            return BuildDto(remote, ParseObject(globalBytes, GlobalConfigPath), ComputeRevision(remoteBytes, globalBytes, scheduler), scheduler);
         }
         finally
         {
@@ -178,7 +179,8 @@ public sealed class RemoteConfigStore
         var globalBytes = await ReadRequiredAsync(GlobalConfigPath, cancellationToken).ConfigureAwait(false);
         var remote = ParseObject(remoteBytes, RemoteConfigPath);
         var global = ParseObject(globalBytes, GlobalConfigPath);
-        return BuildDto(remote, global, ComputeRevision(remoteBytes, globalBytes));
+        var scheduler = await LoadSchedulerAsync(cancellationToken).ConfigureAwait(false);
+        return BuildDto(remote, global, ComputeRevision(remoteBytes, globalBytes, scheduler), scheduler);
     }
 
     public async Task SetCancelHotkeyAsync(string hotkey, CancellationToken cancellationToken = default)
@@ -235,7 +237,8 @@ public sealed class RemoteConfigStore
         {
             var remoteBytes = await ReadRequiredAsync(RemoteConfigPath, cancellationToken).ConfigureAwait(false);
             var globalBytes = await ReadRequiredAsync(GlobalConfigPath, cancellationToken).ConfigureAwait(false);
-            var currentRevision = ComputeRevision(remoteBytes, globalBytes);
+            var scheduler = await LoadSchedulerAsync(cancellationToken).ConfigureAwait(false);
+            var currentRevision = ComputeRevision(remoteBytes, globalBytes, scheduler);
             if (!string.Equals(currentRevision, request.BaseRevision, StringComparison.Ordinal))
             {
                 throw new ConfigConflictException(currentRevision);
@@ -244,14 +247,14 @@ public sealed class RemoteConfigStore
             var remote = ParseObject(remoteBytes, RemoteConfigPath);
             var global = ParseObject(globalBytes, GlobalConfigPath);
             ApplyTasks(remote, request.Tasks);
-            ApplyFields(remote, global, request.Values);
+            ApplyFields(remote, global, scheduler, request.Values);
             SetRootValue(remote, "Name", JsonValue.Create(_remoteConfigName));
             SetRootValue(remote, "CompletionAction", JsonValue.Create(FixedCompletionAction));
 
             var updatedRemoteBytes = Serialize(remote);
             var updatedGlobalBytes = Serialize(global);
-            await WritePairWithRollbackAsync(updatedRemoteBytes, updatedGlobalBytes, remoteBytes, globalBytes, cancellationToken).ConfigureAwait(false);
-            return BuildDto(remote, global, ComputeRevision(updatedRemoteBytes, updatedGlobalBytes));
+            await WriteConfigurationSetAsync(updatedRemoteBytes, updatedGlobalBytes, remoteBytes, globalBytes, scheduler, cancellationToken).ConfigureAwait(false);
+            return await LoadAsync(cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -259,11 +262,15 @@ public sealed class RemoteConfigStore
         }
     }
 
-    private RemoteConfigDto BuildDto(JsonObject remote, JsonObject global, string revision)
+    private RemoteConfigDto BuildDto(JsonObject remote, JsonObject global, string revision, SchedulerSnapshot scheduler)
     {
         var tasks = ReadTasks(remote);
-        var fields = Definitions.Select(definition => definition.ToDto(ReadValue(definition, remote, global))).ToArray();
-        return new RemoteConfigDto(_remoteConfigName, revision, tasks, fields, FixedCompletionAction, DateTimeOffset.UtcNow);
+        var fields = Definitions.Where(definition => !definition.ExistingOnly || GetValue(global, definition.JsonPath) is not null)
+            .Select(definition => definition.ToDto(ReadValue(definition, remote, global)))
+            .Concat(scheduler.Fields.Values.Select(binding => binding.ToDto())).ToArray();
+        var notice = "设置读取自电脑端实际配置。保存时会让空闲的 BetterGI 正常重启并加载新参数；正在执行任务时不会修改。";
+        if (scheduler.Warnings.Count > 0) notice += " " + string.Join(" ", scheduler.Warnings.Distinct());
+        return new RemoteConfigDto(_remoteConfigName, revision, tasks, fields, FixedCompletionAction, DateTimeOffset.UtcNow, ApplicationNotice: notice);
     }
 
     private static IReadOnlyList<TaskItemDto> ReadTasks(JsonObject remote)
@@ -323,9 +330,9 @@ public sealed class RemoteConfigStore
         SetRootValue(remote, "TaskEnabledList", enabled);
     }
 
-    private static void ApplyFields(JsonObject remote, JsonObject global, IReadOnlyDictionary<string, JsonElement> values)
+    private static void ApplyFields(JsonObject remote, JsonObject global, SchedulerSnapshot scheduler, IReadOnlyDictionary<string, JsonElement> values)
     {
-        if (values.Count > Definitions.Count)
+        if (values.Count > Definitions.Count + scheduler.Fields.Count)
         {
             throw new InvalidDataException("提交的配置字段过多。");
         }
@@ -333,12 +340,21 @@ public sealed class RemoteConfigStore
         {
             if (!DefinitionMap.TryGetValue(pair.Key, out var definition))
             {
-                throw new InvalidDataException($"字段不允许远程修改: {pair.Key}");
+                if (scheduler.Fields.TryGetValue(pair.Key, out var binding))
+                {
+                    binding.Apply(pair.Value);
+                    continue;
+                }
+                throw new InvalidDataException("此配置项已变化或不支持从手机修改，请刷新配置。");
             }
-            definition.Validate(pair.Value);
+            if (definition.ExistingOnly && GetValue(global, definition.JsonPath) is null)
+                throw new InvalidDataException("当前 BetterGI 版本尚不支持此配置项。");
             var root = definition.Scope == "global" ? global : remote;
+            if (JsonNode.DeepEquals(GetValue(root, definition.JsonPath), JsonNode.Parse(pair.Value.GetRawText()))) continue;
+            definition.Validate(pair.Value);
             SetValue(root, definition.JsonPath, JsonNode.Parse(pair.Value.GetRawText()));
         }
+        ValidateConfigurationRelations(global, scheduler, values.Keys.Any(key => key.StartsWith("global.autoFightConfig.", StringComparison.Ordinal)));
     }
 
     private static JsonElement ReadValue(FieldDefinition definition, JsonObject remote, JsonObject global)
@@ -490,12 +506,19 @@ public sealed class RemoteConfigStore
         return await File.ReadAllBytesAsync(path, cancellationToken).ConfigureAwait(false);
     }
 
-    private static string ComputeRevision(ReadOnlySpan<byte> remote, ReadOnlySpan<byte> global)
+    private static string ComputeRevision(ReadOnlySpan<byte> remote, ReadOnlySpan<byte> global, SchedulerSnapshot scheduler)
     {
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         hash.AppendData(remote);
         hash.AppendData([0]);
         hash.AppendData(global);
+        foreach (var document in scheduler.RevisionFiles.OrderBy(item => item.Key, StringComparer.Ordinal))
+        {
+            hash.AppendData([0]);
+            hash.AppendData(Encoding.UTF8.GetBytes(document.Key));
+            hash.AppendData([0]);
+            hash.AppendData(document.Value);
+        }
         return Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
     }
 
@@ -600,6 +623,7 @@ public sealed class RemoteConfigStore
             items.Add(Text($"oneDragon.{lower}DomainName", "oneDragon", "自动秘境", $"{label}秘境", "\"\""));
             items.Add(Select($"oneDragon.{lower}SelectedValue", "oneDragon", "自动秘境", $"{label}奖励序号", "\"0\"", sunday));
         }
+        items.AddRange(CreateDesktopDefinitions().Where(item => items.All(existing => existing.Path != item.Path)));
         return items;
     }
 
@@ -637,7 +661,9 @@ public sealed class RemoteConfigStore
         IReadOnlyList<string>? Options,
         double? Minimum,
         double? Maximum,
-        string? Description)
+        string? Description,
+        bool IntegerOnly = true,
+        bool ExistingOnly = false)
     {
         public EditableFieldDto ToDto(JsonElement value)
             => new(Path, Scope, Group, Label, Type, value, Options, Minimum, Maximum, Description);
@@ -649,14 +675,16 @@ public sealed class RemoteConfigStore
                 case EditableFieldType.Toggle when value.ValueKind is not JsonValueKind.True and not JsonValueKind.False:
                     throw new InvalidDataException($"{Label} 必须是开关值。");
                 case EditableFieldType.Number:
-                    if (value.ValueKind != JsonValueKind.Number || !value.TryGetDouble(out var number) ||
+                    if (value.ValueKind != JsonValueKind.Number || !value.TryGetDouble(out var number) || !double.IsFinite(number) ||
+                        (IntegerOnly && number != Math.Truncate(number)) ||
                         (Minimum.HasValue && number < Minimum.Value) || (Maximum.HasValue && number > Maximum.Value))
                     {
                         throw new InvalidDataException($"{Label} 超出允许范围。");
                     }
                     break;
                 case EditableFieldType.Text:
-                    if (value.ValueKind != JsonValueKind.String || (value.GetString()?.Length ?? 0) > 160)
+                    if (value.ValueKind != JsonValueKind.String || (value.GetString()?.Length ?? 0) > 2048 ||
+                        (value.GetString()?.Any(character => char.IsControl(character) && character is not '\n' and not '\r' and not '\t') ?? false))
                     {
                         throw new InvalidDataException($"{Label} 文本无效。");
                     }
@@ -672,6 +700,8 @@ public sealed class RemoteConfigStore
                     {
                         throw new InvalidDataException($"{Label} 多选值无效。");
                     }
+                    if (value.GetArrayLength() > 256 || value.EnumerateArray().Any(item => item.ValueKind != JsonValueKind.String))
+                        throw new InvalidDataException($"{Label} 多选值无效。");
                     var selected = value.EnumerateArray().Select(item => item.GetString()).ToArray();
                     if (selected.Any(item => item is null || !Options.Contains(item, StringComparer.Ordinal)) || selected.Distinct(StringComparer.Ordinal).Count() != selected.Length)
                     {

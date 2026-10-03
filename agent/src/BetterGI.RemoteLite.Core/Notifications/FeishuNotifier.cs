@@ -72,6 +72,11 @@ public sealed class FeishuNotifier(HttpClient httpClient)
         foreach (var task in report.Tasks)
         {
             builder.AppendLine($"- {task.Name}: {TranslateStatus(task.State)}");
+            if (task.State == "failed")
+            {
+                if (!string.IsNullOrWhiteSpace(task.Step)) builder.AppendLine("  步骤: " + task.Step);
+                if (!string.IsNullOrWhiteSpace(task.Location)) builder.AppendLine("  位置: " + task.Location);
+            }
         }
         if (report.Rewards.Count > 0)
         {
@@ -81,6 +86,17 @@ public sealed class FeishuNotifier(HttpClient httpClient)
                 builder.AppendLine($"- {reward.Key} x{reward.Value}");
             }
         }
+        if (report.WoodEstimates is { Count: > 0 })
+        {
+            builder.AppendLine("木材获取估算（画面识别，可能存在误差）:");
+            foreach (var item in report.WoodEstimates) builder.AppendLine($"- {item.Key} 约{item.Value}个");
+        }
+        if (report.PickupObservations is { Count: > 0 })
+        {
+            builder.AppendLine("交互与拾取记录（不是实际新增数量）:");
+            foreach (var item in report.PickupObservations) builder.AppendLine($"- {item.Key} 识别{item.Value}次");
+        }
+        if (!string.IsNullOrWhiteSpace(report.LootCoverage)) builder.AppendLine(report.LootCoverage);
         if (report.DailyRewards is { Count: > 0 })
         {
             builder.AppendLine($"今日累计获得 ({report.DailyRewardDate ?? "本地日期"}):");

@@ -15,6 +15,9 @@ import {RemoteClient, RemoteRpcError} from './client';
 import {clearPairing, loadPairing, persistentStorageState, requestPersistentStorage, savePairing} from './storage';
 import {TabCoordinator} from './tab-coordinator';
 import {reorderTasks} from './task-order';
+import {readFullConfig} from './config-transfer';
+import {readFullReport} from './report-transfer';
+import {activeRunStates, canStart, canSave, readableFailure} from './view-state';
 import {AgentStatus, ConnectionState, EditableField, PairingRecord, PushMessage, RemoteConfig, RunProgress, RunReport, ViewName} from './types';
 import './styles.css';
 
@@ -49,7 +52,35 @@ class App {
   private installPrompt?: InstallPromptEvent;
   private entryGuideDismissed = readLocalFlag(ENTRY_GUIDE_KEY);
   private storageState: 'checking' | 'persistent' | 'managed' | 'unsupported' = 'checking';
-  private readonly openFieldGroups = new Set<string>(['自动秘境']);
+  private readonly openFieldGroups = new Set<string>(['oneDragon:自动秘境']);
+  private readonly draftInputs = new Map<string, string>();
+  private configScope: 'oneDragon' | 'global' | 'scriptGroup' = 'oneDragon';
+  private configSearch = '';
+  private readonly dirtyFields = new Set<string>();
+  private tasksDirty = false;
+  private configReadProgress?: {read: number; total: number};
+
+  private get hasDraft(): boolean { return this.tasksDirty || this.dirtyFields.size > 0; }
+
+  private async loadConfig(initial?: RemoteConfig): Promise<RemoteConfig> {
+    try {
+      return normalizeConfig(await readFullConfig(params => this.client!.call<RemoteConfig>('config.get', params), initial, (read, total) => {
+        this.configReadProgress = {read, total};
+        this.draw();
+      }));
+    } finally { this.configReadProgress = undefined; }
+  }
+
+  private async loadReport(initial?: RunReport): Promise<RunReport | undefined> {
+    return readFullReport(params => this.client!.call<RunReport | undefined>('report.latest', params), initial);
+  }
+
+  private acceptConfig(config: RemoteConfig): void {
+    this.config = config;
+    this.dirtyFields.clear();
+    this.tasksDirty = false;
+    this.draftInputs.clear();
+  }
 
   constructor(private readonly root: HTMLElement) {
     window.addEventListener('beforeinstallprompt', event => {
@@ -96,12 +127,48 @@ class App {
       gameRunning: false, state: 'idle', observedAt: new Date().toISOString(), bindingDaysRemaining: 176,
       bindingExpiresAt: new Date(Date.now() + 176 * 86_400_000).toISOString(), agentVersion: appVersion,
       betterGiCompatibilityVerified: true, betterGiLatestVersion: '0.64.0', betterGiUpdateAvailable: false,
+      capabilities: ['runningStart', 'desktopConfig', 'detailedProgress', 'lootSources', 'paging'],
     };
     this.config = {
       name: '远程每日', revision: 'demo', completionAction: '关闭游戏和软件', readAt: new Date().toISOString(), fields: [],
       tasks: ['领取邮件', '合成树脂', '自动秘境', '自动首领讨伐', '自动幽境危战', '自动地脉花', '领取每日奖励', '领取尘歌壶奖励', '朋友新增调度组']
         .map((name, order) => ({id: `demo-${order}`, name, enabled: order < 4, isCustom: order === 8, order})),
     };
+    this.config.fields = [
+      {path: 'oneDragon.partyName', scope: 'oneDragon', group: '自动秘境', label: '队伍名称', type: 'text', value: '日常队伍'},
+      {path: 'oneDragon.domainName', scope: 'oneDragon', group: '自动秘境', label: '秘境名称', type: 'text', value: '忘却之峡'},
+      {path: 'global.autoPickConfig.enabled', scope: 'global', group: '自动拾取', label: '启用自动拾取', type: 'toggle', value: true},
+      {path: 'global.autoPickConfig.mode', scope: 'global', group: '自动拾取', label: '拾取名单模式', type: 'select', value: 'Blacklist', options: ['Blacklist', 'Whitelist']},
+      {path: 'global.autoPickConfig.itemTextLeftOffset', scope: 'global', group: '自动拾取', label: '物品文字左边界', type: 'number', value: 120, minimum: 0, maximum: 1920},
+      {path: 'global.autoFishingConfig.enabled', scope: 'global', group: '自动钓鱼', label: '启用自动钓鱼', type: 'toggle', value: false},
+      {path: 'global.autoFishingConfig.autoThrowRodTimeOut', scope: 'global', group: '自动钓鱼', label: '未上钩等待时间（秒）', type: 'number', value: 20, minimum: 1, maximum: 600},
+      {path: 'global.autoFightConfig.lockLostWaitTime', scope: 'global', group: '自动战斗', label: '脱锁等待（秒）', type: 'number', value: 0.5, minimum: 0, maximum: 60},
+      {path: 'scriptGroup.demo.project.0.status', scope: 'scriptGroup', group: '调度器 · 每日采集组 / 1. 采集路线', label: '任务状态', type: 'select', value: 'Enabled', options: ['Enabled', 'Disabled']},
+      {path: 'scriptGroup.demo.project.0.runNum', scope: 'scriptGroup', group: '调度器 · 每日采集组 / 1. 采集路线', label: '执行次数', type: 'number', value: 2, minimum: 1, maximum: 9999},
+      {path: 'scriptGroup.demo.project.0.schedule', scope: 'scriptGroup', group: '调度器 · 每日采集组 / 1. 采集路线', label: '执行周期', type: 'select', value: 'Daily', options: ['Daily', 'EveryTwoDays', 'Monday']},
+      {path: 'scriptGroup.demo.project.0.settings.region', scope: 'scriptGroup', group: '调度器 · 每日采集组 / 1. 采集路线', label: '采集地区', type: 'select', value: '蒙德', options: ['蒙德', '璃月']},
+    ];
+    const query = new URLSearchParams(location.search);
+    const view = query.get('view');
+    if (view === 'config' || view === 'reports' || view === 'settings') this.view = view;
+    const scope = query.get('scope');
+    if (scope === 'global' || scope === 'scriptGroup') this.configScope = scope;
+    this.openFieldGroups.add('global:自动拾取');
+    this.openFieldGroups.add('scriptGroup:调度器 · 每日采集组 / 1. 采集路线');
+    this.report = {
+      runId: 'demo-report', status: 'failed', startedAt: new Date(Date.now() - 720000).toISOString(), finishedAt: new Date().toISOString(), durationSeconds: 720,
+      tasks: [{name: '自动秘境', state: 'success', step: '领取奖励'}, {name: '每日采集组', state: 'failed', step: '沿路线移动与采集', location: '清心采集路线 · 第 12 个路径点', message: '当前步骤等待超时，请检查角色是否卡住或路线是否可达。'}],
+      rewards: {'摩拉': 12000, '自由的教导': 6}, dailyRewards: {'摩拉': 24000, '自由的教导': 12}, dailyRewardDate: '演示日期',
+      pickupObservations: {'清心': 8, '薄荷': 5}, woodEstimates: {'杉木': 18},
+      errors: ['每日采集组 / 清心采集路线 / 第 12 个路径点：当前步骤等待超时，请检查角色位置和游戏画面。'], logExcerpt: [], parserVersion: 'adaptive-v3',
+      lootCoverage: '演示数据。未提供数量的采集记录单独展示，不计入确切奖励累计。',
+    };
+    this.status.betterGiRunning = true;
+    if (query.get('scenario') === 'running') {
+      this.status.state = 'running';
+      this.status.activeRunId = 'demo-run';
+      this.progress = {runId: 'demo-run', state: 'running', currentTask: '每日采集组', currentStep: '沿路线移动与采集', currentLocation: '清心采集路线 · 第 12 个路径点', completedTasks: 1, totalTasks: 3, observedAt: new Date().toISOString(), tasks: [{name: '领取邮件', state: 'success'}, {name: '每日采集组', state: 'running'}, {name: '自动秘境', state: 'pending'}]};
+    }
   }
 
   private createClient(): void {
@@ -146,6 +213,9 @@ class App {
 
   private async syncAll(showFeedback = false): Promise<void> {
     if (!this.client) return;
+    if (this.loading) return;
+    if (this.hasDraft && !showFeedback) return;
+    if (this.hasDraft && !confirm('同步电脑配置会替换手机上尚未保存的修改。确认重新读取吗？')) return;
     const feedbackStartedAt = performance.now();
     this.loading = true;
     this.busyAction = showFeedback ? 'sync' : undefined;
@@ -154,21 +224,22 @@ class App {
     try {
       let usedLegacySync = false;
       const configRequest = showFeedback
-        ? this.client.call<RemoteConfig>('config.sync').catch(error => {
+        ? this.client.call<RemoteConfig>('config.sync', {limit: 32}, 90_000).then(config => this.loadConfig(config)).catch(error => {
             if (error instanceof RemoteRpcError && error.code === 'method_not_allowed') {
               usedLegacySync = true;
-              return this.client!.call<RemoteConfig>('config.get');
+              return this.loadConfig();
             }
             throw error;
           })
-        : this.client.call<RemoteConfig>('config.get');
+        : this.loadConfig();
       const [status, config, report] = await Promise.all([
         this.client.call<AgentStatus>('status.get'),
         configRequest,
-        this.client.call<RunReport | undefined>('report.latest'),
+        this.loadReport(),
       ]);
       this.status = status;
-      this.config = normalizeConfig(config);
+      this.acceptConfig(config);
+      this.progress = status.currentProgress ?? (activeRunStates.has(status.state) ? this.progress : undefined);
       this.report = report;
       if (status.bindingExpiresAt && this.pairing && this.pairing.bindingExpiresAt !== status.bindingExpiresAt) {
         this.pairing = {...this.pairing, bindingExpiresAt: status.bindingExpiresAt};
@@ -189,11 +260,15 @@ class App {
   }
 
   private onPush(message: PushMessage): void {
-    if (message.event === 'status.changed') this.status = message.data as AgentStatus;
+    if (message.event === 'status.changed') {
+      this.status = message.data as AgentStatus;
+      this.progress = this.status.currentProgress ?? (activeRunStates.has(this.status.state) ? this.progress : undefined);
+    }
     if (message.event === 'run.progress') this.progress = message.data as RunProgress;
     if (message.event === 'run.completed') {
       this.report = message.data as RunReport;
       this.progress = undefined;
+      void this.loadReport(this.report).then(report => { this.report = report; this.draw(); }).catch(error => this.setError(error));
       void this.refreshConfig();
       this.showNotice('任务已结束，执行报告已生成');
     }
@@ -201,9 +276,9 @@ class App {
   }
 
   private async refreshConfig(): Promise<void> {
-    if (!this.client || this.connection !== 'online') return;
+    if (!this.client || this.connection !== 'online' || this.hasDraft || this.loading) return;
     try {
-      this.config = normalizeConfig(await this.client.call<RemoteConfig>('config.get'));
+      this.acceptConfig(await this.loadConfig());
       this.draw();
     } catch {
     }
@@ -216,7 +291,10 @@ class App {
   }
 
   private async saveConfig(): Promise<void> {
-    if (!this.client || !this.config) return;
+    if (!this.client || !this.config || this.loading) return;
+    const invalid = this.config.fields.find(field => this.dirtyFields.has(field.path) && field.type === 'number' &&
+      (typeof field.value !== 'number' || !Number.isFinite(field.value) || field.minimum != null && field.value < field.minimum || field.maximum != null && field.value > field.maximum));
+    if (invalid) { this.setError(new Error(`请检查“${invalid.label}”的数值${invalid.minimum != null && invalid.maximum != null ? `，允许范围 ${invalid.minimum} 至 ${invalid.maximum}` : ''}。`)); return; }
     const feedbackStartedAt = performance.now();
     this.loading = true;
     this.busyAction = 'save';
@@ -226,14 +304,13 @@ class App {
       const updated = await this.client.call<RemoteConfig>('config.update', {
         baseRevision: this.config.revision,
         tasks: this.config.tasks.map((task, order) => ({...task, order})),
-        values: Object.fromEntries(this.config.fields.map(field => [field.path, field.value])),
-      });
-      this.config = normalizeConfig(updated);
+        values: Object.fromEntries(this.config.fields.filter(field => this.dirtyFields.has(field.path)).map(field => [field.path, field.value])),
+      }, 90_000);
+      this.acceptConfig(await this.loadConfig(updated));
       this.showNotice('配置已安全保存到电脑');
     } catch (error) {
       if (error instanceof RemoteRpcError && error.code === 'config_conflict') {
-        await this.refreshConfig();
-        this.error = '电脑端配置已经变化，已加载最新内容。请重新确认后保存。';
+        this.error = '电脑端配置已经变化。手机草稿已保留，请先同步最新配置，再重新确认你的修改。';
       } else {
         this.setError(error);
       }
@@ -246,28 +323,42 @@ class App {
   }
 
   private async startTask(): Promise<void> {
-    if (!this.client || !this.config) return;
+    if (!this.client || !this.config || this.loading) return;
+    if (this.hasDraft) {
+      this.error = '有尚未保存的任务或参数，请先保存到电脑，再启动任务。';
+      this.draw();
+      return;
+    }
     const enabled = this.config.tasks.filter(task => task.enabled).map(task => task.name);
     if (enabled.length === 0) {
       this.error = '请至少启用一个任务。';
       this.draw();
       return;
     }
-    if (!confirm(`确认启动“${this.config.name}”吗？\n\n${enabled.join('、')}\n\n正常完成后将关闭原神和 BetterGI。`)) return;
+    if (!confirm(`确认启动“${this.config.name}”吗？\n\n${enabled.join('、')}\n\nBetterGI 未启动时会自动打开；已启动时会自动应用配置后执行。正常完成后将关闭原神和 BetterGI。`)) return;
     await this.action('start', '启动指令已被电脑接受', async () => {
-      const accepted = await this.client!.call<{runId: string}>('task.start', {expectedRevision: this.config!.revision, confirmed: true});
-      this.progress = {runId: accepted.runId, state: 'running', completedTasks: 0, totalTasks: enabled.length, observedAt: new Date().toISOString()};
+      const accepted = await this.client!.call<{runId: string}>('task.start', {expectedRevision: this.config!.revision, confirmed: true}, 45_000);
+      if (this.progress?.runId !== accepted.runId) this.progress = {runId: accepted.runId, state: 'starting', currentStep: '正在让 BetterGI 应用配置并启动', completedTasks: 0, totalTasks: enabled.length, observedAt: new Date().toISOString()};
     });
   }
 
   private async stopTask(): Promise<void> {
     if (!this.client || !confirm('确认发送 BetterGI 取消任务快捷键吗？')) return;
-    await this.action('stop', '停止指令已发送，正在等待 BetterGI 确认', async () => {
-      await this.client!.call('task.stop', {runId: this.status?.activeRunId ?? this.progress?.runId ?? null});
+    await this.action('stop', '', async () => {
+      const result = await this.client!.call<{state: string; shortcutSent: boolean}>('task.stop', {runId: this.status?.activeRunId ?? this.progress?.runId ?? null}, 30_000);
+      if (['idle', 'success', 'stopped', 'failed', 'warning'].includes(result.state)) {
+        this.progress = undefined;
+        if (this.status) this.status = {...this.status, state: 'idle', activeRunId: undefined, activeTask: undefined, currentProgress: undefined};
+        this.showNotice(result.shortcutSent ? '任务已结束，执行报告已生成' : '任务已经结束，无需重复停止', 'info');
+      } else {
+        if (this.progress) this.progress = {...this.progress, state: 'stopping'};
+        this.showNotice('停止请求已发送，正在等待 BetterGI 确认', 'info');
+      }
     });
   }
 
   private async action(action: BusyAction, successMessage: string, operation: () => Promise<void>): Promise<void> {
+    if (this.loading) return;
     const feedbackStartedAt = performance.now();
     this.loading = true;
     this.busyAction = action;
@@ -275,7 +366,7 @@ class App {
     this.draw();
     try {
       await operation();
-      this.showNotice(successMessage);
+      if (successMessage) this.showNotice(successMessage);
     } catch (error) {
       this.setError(error);
     } finally {
@@ -289,12 +380,30 @@ class App {
   private updateTask(id: string, enabled: boolean): void {
     if (!this.config) return;
     const task = this.config.tasks.find(item => item.id === id);
-    if (task) task.enabled = enabled;
+    if (task) { task.enabled = enabled; this.tasksDirty = true; this.draw(); }
+  }
+
+  private moveTask(id: string, direction: number, event: KeyboardEvent): void {
+    if (!event.altKey || !this.config || this.loading || !canSave(this.status, this.connection)) return;
+    event.preventDefault();
+    const index = this.config.tasks.findIndex(task => task.id === id);
+    const next = index + direction;
+    if (index < 0 || next < 0 || next >= this.config.tasks.length) return;
+    this.config.tasks = reorderTasks(this.config.tasks, index, next);
+    this.tasksDirty = true;
+    this.draw();
+    queueMicrotask(() => this.root.querySelector<HTMLButtonElement>(`[data-id="${CSS.escape(id)}"] .drag-handle`)?.focus());
   }
 
   private updateField(path: string, value: unknown): void {
     const field = this.config?.fields.find(item => item.path === path);
-    if (field) field.value = value;
+    if (field) { field.value = value; this.dirtyFields.add(path); this.draw(); }
+  }
+
+  private updateInputField(field: EditableField, event: Event): void {
+    const raw = (event.currentTarget as HTMLInputElement).value;
+    this.draftInputs.set(field.path, raw);
+    this.updateField(field.path, field.type === 'number' && raw.trim() !== '' ? Number(raw) : raw);
   }
 
   private toggleMulti(field: EditableField, option: string, checked: boolean): void {
@@ -302,6 +411,7 @@ class App {
     if (checked) values.add(option);
     else values.delete(option);
     field.value = [...values];
+    this.dirtyFields.add(field.path);
     this.draw();
   }
 
@@ -370,7 +480,7 @@ class App {
   }
 
   private setError(error: unknown): void {
-    this.error = error instanceof Error ? error.message : '操作失败';
+    this.error = readableFailure(error instanceof Error ? error.message : '操作失败，请重新同步后再试');
     this.showNotice(this.error, 'error');
   }
 
@@ -391,13 +501,15 @@ class App {
         <header class="topbar">
           <div>
             <p class="brand">BetterGI Remote</p>
-            <p class="computer-name">${this.pairing?.pcName ?? '等待绑定电脑'}</p>
+            <p class="computer-name">${this.pairing?.pcName ?? '等待绑定电脑'}${import.meta.env.DEV && new URLSearchParams(location.search).has('demo') ? ' · 演示数据' : ''}</p>
           </div>
           ${connectionBadge(this.connection)}
         </header>
         ${this.loading ? html`<md-linear-progress indeterminate aria-label="正在处理"></md-linear-progress>` : nothing}
-        <main class="content">
+        ${this.configReadProgress ? html`<p class="sync-progress" role="status">正在读取电脑设置：${this.configReadProgress.read} / ${this.configReadProgress.total} 项</p>` : nothing}
+        <main class=${this.view === 'config' ? 'content config-content' : 'content'}>
           ${this.error ? html`<section class="inline-error" role="alert">${this.error}</section>` : nothing}
+          ${this.status && !this.status.capabilities?.includes('desktopConfig') ? html`<section class="binding-reminder"><strong>请更新电脑端 BetterGI Remote</strong><p>网页已升级，电脑端当前为 ${this.status.agentVersion ?? '旧版'}。请在电脑托盘中检查更新，安装 0.4.0 或更高版本后使用扩展配置、已打开时启动和详细报告。现有绑定仍可使用。</p></section>` : nothing}
           ${this.view === 'home' ? this.homeView() : nothing}
           ${this.view === 'config' ? this.configView() : nothing}
           ${this.view === 'reports' ? this.reportView() : nothing}
@@ -416,15 +528,15 @@ class App {
   private homeView(): TemplateResult {
     if (!this.pairing) return emptyPairing();
     if (!this.status) return loadingState(this.connection === 'online' ? '正在读取电脑状态' : '等待电脑上线');
-    const ready = this.connection === 'online' && this.status.windowsUnlocked && this.status.betterGiVersionSupported && !this.status.betterGiRunning && this.status.state === 'idle';
-    const running = this.status.state === 'running' || Boolean(this.progress);
+    const ready = canStart(this.status, this.connection);
+    const running = activeRunStates.has(this.status.state) || Boolean(this.progress);
     return html`
       <section class="command-hero">
         <div class="hero-image" role="img" aria-label="原神角色在春日花园中庆祝的群像画面"></div>
         <div class="hero-shade"></div>
         <div class="hero-content">
           <h1>${running ? '远征正在进行' : ready ? '今日委托已就绪' : '等待终端就绪'}</h1>
-          <p>${running ? `${this.progress?.currentTask ?? '正在准备任务'}` : ready ? '电脑状态正常，可以从这里启程。' : this.status.message ?? statusReason(this.status)}</p>
+          <p>${running ? this.progress?.currentTask ?? this.status.activeTask ?? '正在准备任务' : ready ? '电脑状态正常，可以从这里启程。' : this.status.message ?? statusReason(this.status)}</p>
           <div class="hero-signal"><span class="status-dot ${ready ? 'good' : running ? 'busy' : 'bad'}"></span>${this.connection === 'online' ? this.pairing.pcName ?? '已连接电脑' : '电脑连接中'}</div>
         </div>
         <small class="asset-credit">角色画面 © 米哈游 / HoYoverse</small>
@@ -449,19 +561,21 @@ class App {
       </section>
       ${this.progress ? html`
         <section class="run-panel">
-          <p class="section-label">当前任务</p>
           <h2>${this.progress.currentTask ?? '正在准备'}</h2>
+          ${this.progress.currentStep ? html`<p aria-live="polite">${this.progress.currentStep}</p>` : nothing}
+          ${this.progress.currentLocation ? html`<p class="progress-location">${this.progress.currentLocation}</p>` : nothing}
           <p>${this.progress.completedTasks} / ${this.progress.totalTasks} 项已完成</p>
           <md-linear-progress value=${this.progress.totalTasks ? this.progress.completedTasks / this.progress.totalTasks : 0}></md-linear-progress>
+          ${this.progress.tasks?.length ? html`<ol class="run-task-list">${this.progress.tasks.map(task => html`<li class=${task.state}><span>${task.name}</span><strong>${statusText(task.state)}</strong>${task.message ? html`<small>${readableFailure(task.message)}</small>` : nothing}</li>`)}</ol>` : nothing}
         </section>` : nothing}
       <section class="action-panel">
         <div>
           <h2>${this.config?.name ?? '远程每日'}</h2>
-          <p>${this.config ? `${this.config.tasks.filter(task => task.enabled).length} 项任务已启用` : '请先同步配置'}</p>
+          <p>${this.hasDraft ? '有未保存的修改，请先在配置页保存' : this.config ? `${this.config.tasks.filter(task => task.enabled).length} 项任务已启用` : '请先同步配置'}</p>
         </div>
         ${running
-          ? html`<md-filled-button class="danger-button" ?disabled=${this.loading || this.connection !== 'online'} @click=${() => void this.stopTask()}>${this.busyAction === 'stop' ? '正在发送…' : '停止任务'}</md-filled-button>`
-          : html`<md-filled-button ?disabled=${!ready || !this.config || this.loading} @click=${() => void this.startTask()}>${this.busyAction === 'start' ? '正在启动…' : '确认并启动'}</md-filled-button>`}
+          ? html`<md-filled-button class="danger-button" ?disabled=${this.loading || this.connection !== 'online' || this.progress?.state === 'stopping' || this.status.state === 'stopping'} @click=${() => void this.stopTask()}>${this.busyAction === 'stop' ? '正在发送…' : this.progress?.state === 'stopping' || this.status.state === 'stopping' ? '等待停止确认…' : '停止任务'}</md-filled-button>`
+          : html`<md-filled-button ?disabled=${!ready || !this.config || this.loading || this.hasDraft} @click=${() => void this.startTask()}>${this.busyAction === 'start' ? '正在启动…' : '确认并启动'}</md-filled-button>`}
       </section>`;
   }
 
@@ -498,58 +612,80 @@ class App {
   private configView(): TemplateResult {
     if (!this.pairing) return emptyPairing();
     if (!this.config) return loadingState(this.connection === 'online' ? '正在读取远程配置' : '电脑上线后才能读取配置');
-    const groups = [...new Set(this.config.fields.map(field => field.group))];
+    const query = this.configSearch.trim().toLocaleLowerCase();
+    const fields = this.config.fields.filter(field => field.scope === this.configScope && (!query || `${field.group} ${field.label} ${field.description ?? ''}`.toLocaleLowerCase().includes(query)));
+    const grouped = new Map<string, EditableField[]>();
+    for (const field of fields) {
+      const group = grouped.get(field.group) ?? [];
+      group.push(field);
+      grouped.set(field.group, group);
+    }
+    const groups = [...grouped.keys()];
+    const editable = canSave(this.status, this.connection) && !this.loading;
     return html`
       <section class="page-heading">
-        <h1>一条龙配置</h1>
-        <p>拖动任务调整顺序。带“全局设置”的字段也会影响电脑端同类任务。</p>
+        <h1>电脑配置</h1>
+        <p>读取电脑中的实际设置，按类别调整任务、全局参数与脚本调度组。</p>
       </section>
-      <section class="task-editor">
+      <section class="config-controls" aria-label="配置分类与搜索">
+        <div class="config-tabs" role="group" aria-label="配置分类">
+          ${([['oneDragon', '一条龙'], ['global', '全局设置'], ['scriptGroup', '脚本调度']] as const).map(([scope, label]) => html`<button type="button" aria-pressed=${scope === this.configScope} @click=${() => { this.configScope = scope; this.draw(); }}>${label}<small>${this.config!.fields.filter(field => field.scope === scope).length}</small></button>`)}
+        </div>
+        <label class="config-search"><span>查找设置</span><input type="search" placeholder="例如：拾取、钓鱼、秘境、队伍" .value=${this.configSearch} @input=${(event: Event) => { this.configSearch = (event.currentTarget as HTMLInputElement).value; this.draw(); }}></label>
+        <p class="field-help">${this.config.applicationNotice ?? '保存时会自动让空闲的 BetterGI 重新载入配置。任务执行中不能修改配置。'}</p>
+        ${this.hasDraft ? html`<p class="draft-note" role="status">手机有未保存的修改，保存后才会用于下一次任务。</p>` : nothing}
+        <md-text-button ?disabled=${this.loading || this.connection !== 'online'} @click=${() => void this.syncAll(true)}>重新同步电脑配置</md-text-button>
+      </section>
+      ${this.configScope === 'oneDragon' && !query ? html`<section class="task-editor">
         <div class="section-heading">
-          <div><h2>任务列表</h2><p>自定义配置组只允许开关和排序</p></div>
+          <div><h2>任务列表</h2><p>拖动调整顺序；脚本参数可在“脚本调度”中编辑</p></div>
         </div>
         <div id="task-list" class="task-list">
           ${this.config.tasks.map(task => html`
             <div class="task-row" data-id=${task.id}>
-              <button class="drag-handle" type="button" aria-label="拖动 ${task.name}">拖动</button>
+              <button class="drag-handle" type="button" ?disabled=${!editable} aria-label=${`拖动 ${task.name}`} title="也可按 Alt+上下方向键调整顺序" @keydown=${(event: KeyboardEvent) => { if (event.key === 'ArrowUp' || event.key === 'ArrowDown') this.moveTask(task.id, event.key === 'ArrowUp' ? -1 : 1, event); }}>拖动</button>
               <div class="task-copy"><strong>${task.name}</strong>${task.isCustom ? html`<small>自定义配置组</small>` : nothing}</div>
-              <md-switch ?selected=${task.enabled} @change=${(event: Event) => this.updateTask(task.id, (event.currentTarget as HTMLInputElement & {selected: boolean}).selected)} aria-label=${`启用 ${task.name}`}></md-switch>
+              <md-switch ?disabled=${!editable} ?selected=${task.enabled} @change=${(event: Event) => this.updateTask(task.id, (event.currentTarget as HTMLInputElement & {selected: boolean}).selected)} aria-label=${`启用 ${task.name}`}></md-switch>
             </div>`)}
         </div>
-      </section>
+      </section>` : nothing}
       <section class="field-groups">
         ${groups.map(group => html`
-          <details class="field-group" ?open=${this.openFieldGroups.has(group)} @toggle=${(event: Event) => this.rememberFieldGroup(group, (event.currentTarget as HTMLDetailsElement).open)}>
-            <summary>${group}<span>${this.config!.fields.filter(field => field.group === group).length} 项</span></summary>
+          <details class="field-group" ?open=${Boolean(query) || this.openFieldGroups.has(this.configScope + ':' + group)} @toggle=${(event: Event) => this.rememberFieldGroup(this.configScope + ':' + group, (event.currentTarget as HTMLDetailsElement).open)}>
+            <summary>${group}<span>${grouped.get(group)!.length} 项</span></summary>
             <div class="field-grid">
-              ${this.config!.fields.filter(field => field.group === group).map(field => this.fieldTemplate(field))}
+              ${query || this.openFieldGroups.has(this.configScope + ':' + group) ? grouped.get(group)!.map(field => this.fieldTemplate(field)) : nothing}
             </div>
           </details>`)}
+        ${groups.length === 0 ? html`<p class="empty-copy">${query ? '没有匹配的设置，请换一个关键词。' : '电脑中尚未配置此类任务或参数。请在 BetterGI 中配置并保存后重新同步。'}</p>` : nothing}
       </section>
       <section class="save-bar">
-        <div><strong>完成动作</strong><p>${this.config.completionAction}</p></div>
-        <md-filled-button ?disabled=${this.connection !== 'online' || this.status?.betterGiRunning || this.loading} @click=${() => void this.saveConfig()}>${this.busyAction === 'save' ? '正在保存…' : '保存到电脑'}</md-filled-button>
+        <div><strong>${this.hasDraft ? '有待保存的修改' : '已与电脑同步'}</strong><p>${editable ? '保存后电脑与手机使用同一组参数' : this.loading ? '正在同步或保存，请稍候' : '任务结束且电脑在线时可保存'}</p></div>
+        <md-filled-button ?disabled=${!editable || !this.hasDraft} @click=${() => void this.saveConfig()}>${this.busyAction === 'save' ? '正在保存…' : '保存到电脑'}</md-filled-button>
       </section>`;
   }
 
   private fieldTemplate(field: EditableField): TemplateResult {
+    const disabled = this.loading || !canSave(this.status, this.connection);
     const help = field.description ? html`<small class="field-help">${field.description}</small>` : nothing;
     if (field.type === 'toggle') {
-      return html`<label class="toggle-field"><span><strong>${field.label}</strong>${help}</span><md-switch ?selected=${Boolean(field.value)} @change=${(event: Event) => this.updateField(field.path, (event.currentTarget as HTMLElement & {selected: boolean}).selected)}></md-switch></label>`;
+      return html`<label class="toggle-field"><span><strong>${field.label}</strong>${help}</span><md-switch ?disabled=${disabled} aria-label=${field.label} ?selected=${Boolean(field.value)} @change=${(event: Event) => this.updateField(field.path, (event.currentTarget as HTMLElement & {selected: boolean}).selected)}></md-switch></label>`;
     }
     if (field.type === 'select') {
-      return html`<label class="input-field"><span>${field.label}${field.scope === 'global' ? html`<small>全局设置</small>` : nothing}</span><md-outlined-select .value=${String(field.value ?? '')} @change=${(event: Event) => this.updateField(field.path, (event.currentTarget as HTMLSelectElement).value)}>${(field.options ?? []).map(option => html`<md-select-option .value=${option}><div slot="headline">${option || '未设置'}</div></md-select-option>`)}</md-outlined-select>${help}</label>`;
+      return html`<label class="input-field"><span>${field.label}</span><md-outlined-select ?disabled=${disabled} aria-label=${field.label} .value=${String(field.value ?? '')} @change=${(event: Event) => this.updateField(field.path, (event.currentTarget as HTMLSelectElement).value)}>${(field.options ?? []).map(option => html`<md-select-option .value=${option}><div slot="headline">${optionLabel(option)}</div></md-select-option>`)}</md-outlined-select>${help}</label>`;
     }
     if (field.type === 'multiSelect') {
       const selected = new Set(Array.isArray(field.value) ? field.value.map(String) : []);
-      return html`<fieldset class="multi-field"><legend>${field.label}${field.scope === 'global' ? html`<small>全局设置</small>` : nothing}</legend><div class="multi-options">${(field.options ?? []).map(option => html`<label><md-checkbox ?checked=${selected.has(option)} @change=${(event: Event) => this.toggleMulti(field, option, (event.currentTarget as HTMLInputElement).checked)}></md-checkbox><span>${option}</span></label>`)}</div>${help}</fieldset>`;
+      return html`<fieldset class="multi-field"><legend>${field.label}</legend><div class="multi-options">${(field.options ?? []).map(option => html`<label><md-checkbox ?disabled=${disabled} ?checked=${selected.has(option)} @change=${(event: Event) => this.toggleMulti(field, option, (event.currentTarget as HTMLInputElement).checked)}></md-checkbox><span>${optionLabel(option)}</span></label>`)}</div>${help}</fieldset>`;
     }
-    return html`<label class="input-field"><span>${field.label}${field.scope === 'global' ? html`<small>全局设置</small>` : nothing}</span><md-outlined-text-field type=${field.type === 'number' ? 'number' : 'text'} .value=${String(field.value ?? '')} min=${field.minimum ?? nothing} max=${field.maximum ?? nothing} @input=${(event: Event) => this.updateField(field.path, field.type === 'number' ? Number((event.currentTarget as HTMLInputElement).value) : (event.currentTarget as HTMLInputElement).value)}></md-outlined-text-field>${help}</label>`;
+    return html`<label class="input-field"><span>${field.label}</span><md-outlined-text-field ?disabled=${disabled} aria-label=${field.label} type=${field.type === 'number' ? 'number' : 'text'} step="any" .value=${this.draftInputs.get(field.path) ?? String(field.value ?? '')} min=${field.minimum ?? nothing} max=${field.maximum ?? nothing} @input=${(event: Event) => this.updateInputField(field, event)}></md-outlined-text-field>${help}</label>`;
   }
 
   private rememberFieldGroup(group: string, open: boolean): void {
+    if (this.openFieldGroups.has(group) === open) return;
     if (open) this.openFieldGroups.add(group);
     else this.openFieldGroups.delete(group);
+    this.draw();
   }
 
   private reportView(): TemplateResult {
@@ -560,11 +696,14 @@ class App {
         <div><p class="section-label">执行结果</p><h2>${statusText(this.report.status)}</h2></div>
         <strong>${formatDuration(this.report.durationSeconds)}</strong>
       </section>
-      <section class="report-section"><h2>任务</h2><div class="result-grid">${this.report.tasks.map(task => html`<div class="result-item"><span>${task.name}</span><strong>${statusText(task.state)}</strong>${task.message ? html`<small>${task.message}</small>` : nothing}</div>`)}</div></section>
+      <section class="report-section"><h2>任务与步骤</h2><div class="result-grid">${this.report.tasks.map(task => html`<div class="result-item"><span>${task.name}</span><strong>${statusText(task.state)}</strong>${task.step ? html`<small>步骤：${task.step}</small>` : nothing}${task.location ? html`<small>位置：${task.location}</small>` : nothing}${task.message ? html`<small>${readableFailure(task.message)}</small>` : nothing}${Object.keys(task.rewards ?? {}).length ? html`<small>获得：${Object.entries(task.rewards ?? {}).map(([name, count]) => `${name} × ${count}`).join('、')}</small>` : nothing}</div>`)}</div></section>
       <section class="report-section"><h2>本次任务获得</h2>${Object.keys(this.report.rewards).length ? html`<div class="reward-grid">${Object.entries(this.report.rewards).map(([name, count]) => html`<div><span>${name}</span><strong>x${count}</strong></div>`)}</div>` : html`<p class="empty-copy">本次没有识别到可汇总的任务道具。</p>`}${this.report.rewardRecognitionStatus ? html`<p class="reward-note">${this.report.rewardRecognitionStatus}</p>` : nothing}</section>
+      ${Object.keys(this.report.pickupObservations ?? {}).length ? html`<section class="report-section"><h2>采集与拾取记录</h2><p class="reward-note">以下次数来自拾取识别记录，可能包含交互或重复识别，不能当作背包实际新增数量。</p><div class="reward-grid">${Object.entries(this.report.pickupObservations ?? {}).map(([name, count]) => html`<div><span>${name}</span><strong>识别 ${count} 次</strong></div>`)}</div></section>` : nothing}
+      ${Object.keys(this.report.woodEstimates ?? {}).length ? html`<section class="report-section"><h2>木材获取估算</h2><p class="reward-note">BetterGI 根据伐木画面识别的数量，可能存在识别误差，独立于确切奖励累计。</p><div class="reward-grid">${Object.entries(this.report.woodEstimates ?? {}).map(([name, count]) => html`<div><span>${name}</span><strong>约 ${count} 个</strong></div>`)}</div></section>` : nothing}
+      ${this.report.lootCoverage ? html`<p class="reward-note" role="note">${this.report.lootCoverage}</p>` : nothing}
       <section class="report-section"><h2>今日累计获得</h2><p class="report-date">${this.report.dailyRewardDate ?? '电脑本地日期'}</p>${Object.keys(this.report.dailyRewards ?? {}).length ? html`<div class="reward-grid">${Object.entries(this.report.dailyRewards ?? {}).map(([name, count]) => html`<div><span>${name}</span><strong>x${count}</strong></div>`)}</div>` : html`<p class="empty-copy">今天暂时没有可累计的奖励识别结果。</p>`}</section>
       ${this.report.dailyRewardStatus ? html`<section class="report-section"><h2>每日奖励</h2><p>${this.report.dailyRewardStatus}</p></section>` : nothing}
-      ${this.report.errors.length ? html`<section class="report-section error-list"><h2>错误</h2>${this.report.errors.map(error => html`<p>${error}</p>`)}</section>` : nothing}`;
+      ${this.report.errors.length ? html`<section class="report-section error-list"><h2>未完成的原因</h2>${this.report.errors.map(error => html`<p>${readableFailure(error)}</p>`)}</section>` : nothing}`;
   }
 
   private settingsView(): TemplateResult {
@@ -597,6 +736,7 @@ class App {
     if (!element || !this.config) return;
     this.sortable = Sortable.create(element, {
       animation: 150,
+      disabled: this.loading || !canSave(this.status, this.connection),
       handle: '.drag-handle',
       ghostClass: 'task-ghost',
       onEnd: (event: SortableEvent) => {
@@ -604,6 +744,7 @@ class App {
         const newIndex = event.newDraggableIndex ?? event.newIndex;
         if (oldIndex === undefined || newIndex === undefined || oldIndex === newIndex) return;
         this.config!.tasks = reorderTasks(this.config!.tasks, oldIndex, newIndex);
+        this.tasksDirty = true;
         this.taskListDomReordered = true;
         window.setTimeout(() => this.showNotice('任务顺序已调整，点击“保存到电脑”后生效', 'info'), 0);
       },
@@ -649,12 +790,19 @@ function loadingState(message: string): TemplateResult {
 function statusReason(status: AgentStatus): string {
   if (!status.windowsUnlocked) return 'Windows 已锁屏';
   if (!status.betterGiVersionSupported) return 'BetterGI 版本不受支持';
-  if (status.betterGiRunning) return '请先关闭 BetterGI';
-  return '电脑状态需要检查';
+  if (!status.betterGiConfigured) return '请在电脑端选择 BetterGI 安装目录';
+  if (status.state === 'updating') return '正在保存并应用电脑配置，请稍候';
+  if (activeRunStates.has(status.state)) return '任务正在执行，可查看当前步骤';
+  if (status.state !== 'idle') return '电脑正在执行其他任务，请等待完成';
+  return status.betterGiRunning ? 'BetterGI 已打开，启动时会自动应用任务配置' : '启动任务时会自动打开 BetterGI';
 }
 
 function statusText(status: string): string {
-  return ({success: '成功', failed: '失败', stopped: '已停止', warning: '有警告', running: '执行中', pending: '等待', skipped: '跳过'} as Record<string, string>)[status] ?? '未知';
+  return ({success: '成功', failed: '失败', stopped: '已停止', warning: '有警告', starting: '准备中', running: '执行中', stopping: '正在停止', pending: '等待', skipped: '跳过'} as Record<string, string>)[status] ?? '待确认';
+}
+
+function optionLabel(value: string): string {
+  return ({Enabled: '启用', Disabled: '停用', Daily: '每天', EveryTwoDays: '每两天', Monday: '周一', Tuesday: '周二', Wednesday: '周三', Thursday: '周四', Friday: '周五', Saturday: '周六', Sunday: '周日', Whitelist: '白名单', Blacklist: '黑名单', BitBlt: '传统画面捕获', WindowsGraphicsCapture: 'Windows 图形捕获', Closed: '关闭', AllowAutoPickupForNonElite: '普通敌人允许拾取', DisableAutoPickupForNonElite: '普通敌人不拾取'} as Record<string, string>)[value] ?? (value || '未设置');
 }
 
 function formatDate(value: string): string {

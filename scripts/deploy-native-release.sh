@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-release="${1:-0.3.5}"
+release="${1:-0.4.0}"
 app_root="/opt/bettergi-remote-lite"
 incoming="/tmp/bgrl-deploy-${release}"
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -46,7 +46,9 @@ chown -R bettergi-remote-lite:bettergi-remote-lite "${app_root}/web.next"
 rm -rf "${app_root}/web"
 mv "${app_root}/web.next" "${app_root}/web"
 rm -rf "${app_root}/downloads.next"
-cp -a "${incoming}/update" "${app_root}/downloads.next"
+mkdir -p "${app_root}/downloads.next"
+cp -a "${app_root}/downloads/." "${app_root}/downloads.next/"
+cp -a "${incoming}/update/." "${app_root}/downloads.next/"
 chown -R bettergi-remote-lite:bettergi-remote-lite "${app_root}/downloads.next"
 rm -rf "${app_root}/downloads"
 mv "${app_root}/downloads.next" "${app_root}/downloads"

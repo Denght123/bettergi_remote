@@ -9,13 +9,13 @@
   --violet: #69558f;
   --violet-soft: #e8e0f2;
   --sky: #ccecef;
-  --aqua: #2c8b87;
+  --aqua: #237770;
   --grass: #cfe9a8;
   --cream: #fffaf0;
   --paper: #f7f2e7;
   --paper-raised: #fffdf8;
   --gold: #c89a3c;
-  --coral: #c96146;
+  --coral: #b64b36;
   --danger: #b94f4a;
   --warning: #b66f24;
   --text: var(--ink);
@@ -131,7 +131,42 @@ md-linear-progress { width: 100%; --md-linear-progress-active-indicator-color: v
 .multi-field { border: 0; margin: 0; padding: 0; display: grid; gap: 10px; }
 .multi-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .multi-options label { display: flex; align-items: center; gap: 7px; min-height: 48px; background: #f0eee8; padding: 3px 10px 3px 1px; border-radius: 10px; }
-.save-bar { position: sticky; bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 8; }
+.save-bar { position: fixed; left: 50%; transform: translateX(-50%); width: min(820px, 100%); bottom: calc(72px + env(safe-area-inset-bottom)); z-index: 25; border-radius: 0; padding: 12px 16px; background: var(--surface-solid); min-height: 86px; }
+.save-bar strong { font-family: inherit; font-size: 16px; }
+.save-bar p { font-size: 12px; line-height: 1.45; }
+.content.config-content { padding-bottom: 160px; }
+
+.config-controls { padding: 18px 20px; background: var(--surface-solid); border-radius: 14px; display: grid; gap: 14px; }
+.config-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.config-tabs button { min-height: 48px; border: 0; border-radius: 10px; background: var(--paper); color: var(--pine-deep); padding: 9px 6px; cursor: pointer; font-weight: 700; transition: background-color .18s ease, color .18s ease; }
+.config-tabs button[aria-pressed="true"] { background: var(--pine); color: var(--paper-raised); }
+.config-tabs small { margin-left: 5px; font-variant-numeric: tabular-nums; font-weight: 500; }
+.config-tabs button:hover { background: var(--pine-soft); color: var(--pine-deep); }
+.config-search { display: grid; gap: 8px; font-weight: 700; font-size: 14px; }
+.config-search input { width: 100%; min-height: 48px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper-raised); color: var(--ink); padding: 10px 12px; }
+.config-search input:focus-visible { outline: 2px solid var(--violet); outline-offset: 2px; }
+.config-controls p { margin: 0; line-height: 1.55; }
+.sync-progress { margin: 0; padding: 10px 20px; background: var(--pine-soft); color: var(--pine-deep); font-size: 14px; }
+.draft-note { color: var(--warning); font-size: 14px; }
+.config-controls md-text-button { justify-self: start; }
+.field-group summary { gap: 12px; overflow-wrap: anywhere; }
+.field-group summary span { flex-shrink: 0; }
+.run-task-list { margin: 18px 0 0; padding: 0; list-style: none; }
+.run-task-list li { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px 16px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.run-task-list li:last-child { border-bottom: 0; }
+.run-task-list small { grid-column: 1 / -1; color: var(--text-muted); line-height: 1.6; overflow-wrap: anywhere; }
+.run-task-list .failed strong { color: var(--danger); }
+.run-task-list .running strong { color: var(--violet); }
+.run-task-list .success strong { color: var(--pine); }
+.progress-location { overflow-wrap: anywhere; font-size: 14px; }
+.result-item small { line-height: 1.5; overflow-wrap: anywhere; }
+@media (max-width: 400px) {
+  .config-controls { padding: 16px 12px; }
+  .config-tabs small { display: block; margin: 4px 0 0; }
+  .result-grid { grid-template-columns: minmax(0,1fr); }
+  .save-bar { flex-wrap: nowrap; gap: 12px; }
+  .save-bar md-filled-button { flex-shrink: 0; }
+}
 
 .report-summary { --report-accent: var(--pine); padding: 22px; display: flex; align-items: end; justify-content: space-between; gap: 18px; border-radius: 16px; box-shadow: inset 0 3px var(--report-accent), var(--shadow); }
 .report-summary.failed { --report-accent: var(--danger); }

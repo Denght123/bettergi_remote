@@ -38,7 +38,7 @@ internal sealed class HeroPanel : Panel
                 0f);
             e.Graphics.FillRectangle(shade, target);
         }
-        using var line = new Pen(Color.FromArgb(165, 255, 250, 230));
+        using var line = new Pen(UiPalette.Line);
         e.Graphics.DrawLine(line, 0, Height - 1, Width, Height - 1);
     }
 

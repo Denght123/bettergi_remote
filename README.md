@@ -20,21 +20,23 @@ BetterGI Remote 是一个轻量、无账号的 BetterGI 手机远程控制工具
 
 ### 电脑端设置
 
-![BetterGI Remote 电脑端设置界面](docs/images/desktop-settings-v0.3.5.png)
+![BetterGI Remote 电脑端设置界面](docs/images/desktop-settings-v0.4.2.png)
 
 ### 手机端控制页
 
 <p align="center">
-  <img src="docs/images/mobile-home-v0.3.5.jpg" alt="BetterGI Remote 手机端控制页面" width="420">
+  <img src="docs/images/mobile-home-v0.4.2.png" alt="BetterGI Remote 手机端控制页面" width="420">
 </p>
+
+以上截图使用隔离演示数据，不代表实际游戏任务或物品收获。
 
 ## 下载
 
-当前版本：**v0.4.1**
+当前版本：**v0.4.2**
 
-- [从 BetterGI Remote 服务下载 Windows 安装包](https://bgiremote.163831.xyz/downloads/BetterGI.Remote.Setup.0.4.1.exe)
-- [GitHub Release 备用下载](https://github.com/Denght123/bettergi_remote/releases/latest/download/BetterGI.Remote.Setup.0.4.1.exe)
-- SHA-256：`ca6ef8096e4b0b9ee1573f0d91da16a93330a1341bdea4f0ed7679aa3530d621`
+- [从 BetterGI Remote 服务下载 Windows 安装包](https://bgiremote.163831.xyz/downloads/BetterGI.Remote.Setup.0.4.2.exe)
+- [GitHub Release 备用下载](https://github.com/Denght123/bettergi_remote/releases/latest/download/BetterGI.Remote.Setup.0.4.2.exe)
+- SHA-256：`03b720911e4f5c1e3b3fa04da3f79ae0e652af4ab2dbb61ac4fb71b62e4f3d7d`
 - 手机控制入口：[https://bgiremote.163831.xyz](https://bgiremote.163831.xyz)
 
 安装包目前没有购买商业代码签名证书，因此 Windows SmartScreen 可能显示“Windows 已保护你的电脑”。请确认文件来自本仓库 Release，并核对 SHA-256；然后点击“更多信息”→“仍要运行”。
@@ -81,6 +83,16 @@ Windows 小助手会在当前用户登录后自动启动并驻留系统托盘。
 - 领取尘歌壶奖励
 
 已有自定义调度器配置组支持开关和排序，但手机不能新增、删除或修改组内脚本。
+
+## v0.4.2 界面与滚动优化
+
+- 桌面、手机、绑定和更新界面统一为浅色；应用窗口使用自绘标题栏，保留拖动、缩放和最小化/最大化/关闭操作。
+- 中文字体随包加载；桌面常规 400 / 标题 500，功能图标采用 Fluent Regular 字形，解释移至按需帮助，必要风险提示仍保留。
+- 修复桌面滚动时全子树刷新和透明容器递归重绘。受控同机测试平均每步处理耗时由 39.3ms 降至 8.8ms，视觉样式保持不变；不是显示 FPS 测量。
+- 手机保留草稿、搜索、键盘排序、分页读取和旧客户端兼容提示；动效遵守减少动态效果偏好。
+- 任务、绑定、加密、配置和通知逻辑不变；延续 v0.4.1 更新检查与下载修复。
+
+详见 [v0.4.2 发布说明](docs/release-0.4.2.md)。
 
 ## v0.3.0 新增
 

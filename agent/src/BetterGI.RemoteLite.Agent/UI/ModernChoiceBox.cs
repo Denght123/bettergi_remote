@@ -20,7 +20,7 @@ internal sealed class ModernChoiceBox : Control
         Height = 46;
         TabStop = true;
         Cursor = Cursors.Hand;
-        Font = new Font("Microsoft YaHei UI", 10f, FontStyle.Regular);
+        Font = UiPalette.Font(10f, FontStyle.Regular);
         AccessibleRole = AccessibleRole.ComboBox;
         _menu = new ContextMenuStrip
         {
@@ -120,8 +120,8 @@ internal sealed class ModernChoiceBox : Control
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
         var bounds = new Rectangle(0, 0, Math.Max(1, Width - 1), Math.Max(1, Height - 1));
         using var path = ModernButton.RoundedRectangle(bounds, 10);
-        using var fill = new SolidBrush(_hovered || Focused || _menu.Visible ? Color.FromArgb(17, 44, 63) : UiPalette.Input);
-        using var border = new Pen(Focused || _menu.Visible ? UiPalette.AccentBlue : _hovered ? UiPalette.LineBright : UiPalette.Line, Focused || _menu.Visible ? 1.6f : 1f);
+        using var fill = new SolidBrush(_hovered || Focused || _menu.Visible ? Color.FromArgb(235, 241, 248) : UiPalette.Input);
+        using var border = new Pen(Focused || _menu.Visible ? UiPalette.AccentBlue : _hovered ? UiPalette.LineBright : UiPalette.Line, Focused || _menu.Visible ? 1.2f : .8f);
         e.Graphics.FillPath(fill, path);
         e.Graphics.DrawPath(border, path);
 

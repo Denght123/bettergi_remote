@@ -1,0 +1,3 @@
+Remote UI Sans is a renamed UI subset of Noto Sans SC, derived at weights 400 and 500. Source: Google Fonts / ofl/notosanssc. License: SIL OFL 1.1 (OFL.txt). Fonts are loaded privately in the process and are never installed system-wide. The subset includes GB2312 and all current UI/catalog characters; fallback remains available for uncommon user content.
+
+Remote Fluent Icons is a renamed subset of Microsoft Fluent System Icons Regular (16 reviewed 24px glyphs), distributed under the MIT license in FluentIcons-LICENSE.txt. Native text uses regular 400; titles use medium 500. No system-wide font installation.

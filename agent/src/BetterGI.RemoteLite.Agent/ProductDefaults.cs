@@ -7,7 +7,7 @@ internal static class ProductDefaults
         ? value
         : ProductionRelayBaseUrl;
     public const string ProductName = "BetterGI Remote";
-    public const string ProductVersion = "0.4.1";
+    public const string ProductVersion = "0.4.2";
     public static string ControlEntryUrl => RelayBaseUrl;
     public const string GitHubRepository = "Denght123/bettergi_remote";
     public const string GitHubReleasesUrl = "https://github.com/Denght123/bettergi_remote/releases";

@@ -4,20 +4,12 @@ internal sealed class BufferedScrollPanel : Panel
 {
     public BufferedScrollPanel()
     {
-        SetStyle(
-            ControlStyles.AllPaintingInWmPaint |
-            ControlStyles.OptimizedDoubleBuffer |
-            ControlStyles.ResizeRedraw |
-            ControlStyles.UserPaint,
-            true);
+        SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer |
+            ControlStyles.ResizeRedraw | ControlStyles.UserPaint, true);
         DoubleBuffered = true;
         ResizeRedraw = true;
         UpdateStyles();
     }
-
-    protected override void OnScroll(ScrollEventArgs se)
-    {
-        base.OnScroll(se);
-        Invalidate(true);
-    }
+    // ScrollableControl already moves child windows and invalidates exposed pixels.
+    // Invalidating every descendant on each thumb-track event defeats that native path.
 }

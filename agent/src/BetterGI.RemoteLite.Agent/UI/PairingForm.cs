@@ -3,7 +3,7 @@ using QRCoder;
 
 namespace BetterGI.RemoteLite.Agent.UI;
 
-internal sealed class PairingForm : Form
+internal sealed class PairingForm : StudioForm
 {
     private readonly Bitmap _bitmap;
     private readonly System.Windows.Forms.Timer? _boundTimer;
@@ -11,9 +11,10 @@ internal sealed class PairingForm : Form
     public PairingForm(string relayBaseUrl, ReadOnlySpan<byte> secret, bool alreadyBound, Func<bool>? isBound = null, DateTimeOffset? bindingExpiresAt = null)
     {
         Text = alreadyBound ? "手机连接二维码" : "连接手机";
+        UiPalette.ApplyWindow(this);
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(520, 720);
-        FormBorderStyle = FormBorderStyle.FixedDialog;
+        SetContentSize(new Size(520, 660));
+        ResizeEnabled = false;
         MaximizeBox = false;
         MinimizeBox = false;
         BackColor = UiPalette.Paper;
@@ -29,8 +30,8 @@ internal sealed class PairingForm : Form
         {
             Text = alreadyBound ? "在手机上恢复控制端" : "最后一步：用手机扫码",
             AutoSize = true,
-            Font = new Font("Microsoft YaHei UI", 18, FontStyle.Bold),
-            ForeColor = Color.White,
+            Font = UiPalette.Font(18, FontStyle.Bold),
+            ForeColor = UiPalette.Text,
             BackColor = Color.Transparent,
             Location = new Point(28, 41),
         };
@@ -39,10 +40,10 @@ internal sealed class PairingForm : Form
             Dock = DockStyle.Top,
             Height = 122,
             BackColor = UiPalette.Violet,
-            BackgroundImage = ImageAssetLoader.Load(Path.Combine(AppContext.BaseDirectory, "assets", "paimon-guide.jpg")),
+            BackgroundImage = ImageAssetLoader.Load(Path.Combine(AppContext.BaseDirectory, "assets", "spring-adventure-party.jpg")),
             ImageFocusY = 0.36f,
-            ShadeFrom = Color.FromArgb(220, 73, 59, 102),
-            ShadeTo = Color.FromArgb(42, 73, 59, 102),
+            ShadeFrom = Color.FromArgb(245, 255, 255, 255),
+            ShadeTo = Color.FromArgb(112, 255, 255, 255),
         };
         hero.Controls.Add(title);
         var picture = new PictureBox
@@ -67,7 +68,7 @@ internal sealed class PairingForm : Form
         {
             Text = "二维码有效 5 分钟",
             Dock = DockStyle.Top,
-            Height = 30,
+            Height = 40,
             ForeColor = UiPalette.Violet,
             TextAlign = ContentAlignment.MiddleCenter,
         };
@@ -80,14 +81,18 @@ internal sealed class PairingForm : Form
             Text = relayBaseUrl.TrimEnd('/'),
             ReadOnly = true,
             Dock = DockStyle.Top,
+            BorderStyle = BorderStyle.None,
             Margin = new Padding(20),
             TextAlign = HorizontalAlignment.Center,
             BackColor = UiPalette.Cream,
             ForeColor = UiPalette.Ink,
         };
-        var copy = new Button
+        var copy = new ModernButton
         {
             Text = "复制日常控制网址",
+            Glyph = UiGlyph.Link,
+            Variant = ModernButtonVariant.Primary,
+            CanvasColor = UiPalette.DarkCanvas,
             Dock = DockStyle.Top,
             Height = 42,
         };
@@ -97,9 +102,11 @@ internal sealed class PairingForm : Form
             Clipboard.SetText(relayBaseUrl.TrimEnd('/'));
             copy.Text = "已复制，可以发到文件传输助手";
         };
-        var done = new Button
+        var done = new ModernButton
         {
             Text = "完成",
+            Variant = ModernButtonVariant.Secondary,
+            CanvasColor = UiPalette.DarkCanvas,
             Dock = DockStyle.Bottom,
             Height = 44,
             Visible = alreadyBound,

@@ -23,7 +23,7 @@ internal static class Program
         using var singleInstance = new Mutex(true, mutexName, out var ownsMutex);
         if (!ownsMutex)
         {
-            MessageBox.Show("BetterGI Remote 已经在后台运行。请查看任务栏右下角托盘。", "BetterGI Remote", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            UI.AppDialog.Show("BetterGI Remote 已经在后台运行。请查看任务栏右下角托盘。", "BetterGI Remote", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
         ApplicationConfiguration.Initialize();

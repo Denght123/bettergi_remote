@@ -22,26 +22,27 @@ internal sealed class ModernButton : Button
         SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
         FlatStyle = FlatStyle.Flat;
         FlatAppearance.BorderSize = 0;
-        Height = 46;
+        Height = 48;
         Cursor = Cursors.Hand;
-        Font = new Font("Microsoft YaHei UI", 9.5f, FontStyle.Bold);
+        Font = UiPalette.Font(10.5f);
         _animationTimer = new System.Windows.Forms.Timer { Interval = 16 };
         _animationTimer.Tick += (_, _) => Animate();
     }
 
     public UiGlyph Glyph { get; set; }
     public ModernButtonVariant Variant { get; set; } = ModernButtonVariant.Secondary;
-    public int CornerRadius { get; set; } = 11;
+    public int CornerRadius { get; set; } = 12;
     public int GlyphSize { get; set; } = 21;
     public int ContentPadding { get; set; } = 16;
-    public int GlyphGap { get; set; } = 10;
+    public int GlyphGap { get; set; } = 8;
     public Color CanvasColor { get; set; } = UiPalette.Surface;
 
     protected override void OnMouseEnter(EventArgs e)
     {
         base.OnMouseEnter(e);
         _targetProgress = 1;
-        _animationTimer.Start();
+        if (UiMotion.Enabled) _animationTimer.Start();
+        else { _hoverProgress = _targetProgress; Invalidate(); }
     }
 
     protected override void OnMouseLeave(EventArgs e)
@@ -49,7 +50,8 @@ internal sealed class ModernButton : Button
         base.OnMouseLeave(e);
         _pressed = false;
         _targetProgress = 0;
-        _animationTimer.Start();
+        if (UiMotion.Enabled) _animationTimer.Start();
+        else { _hoverProgress = _targetProgress; Invalidate(); }
     }
 
     protected override void OnMouseDown(MouseEventArgs mevent)
@@ -82,18 +84,18 @@ internal sealed class ModernButton : Button
         var background = Blend(normal, hover, _hoverProgress);
         if (!Enabled)
         {
-            background = Blend(background, UiPalette.DarkCanvas, .48f);
-            foreground = Color.FromArgb(118, 139, 154);
-            border = Color.FromArgb(55, 80, 98);
+            background = UiPalette.SurfaceRaised;
+            foreground = UiPalette.TextMuted;
+            border = UiPalette.Line;
         }
         using var path = RoundedRectangle(rectangle, CornerRadius);
         using var brush = new SolidBrush(background);
         e.Graphics.FillPath(brush, path);
-        using var borderPen = new Pen(border, 1);
+        using var borderPen = new Pen(border, .8f);
         e.Graphics.DrawPath(borderPen, path);
 
         var iconSize = Math.Max(14, GlyphSize);
-        var textSize = TextRenderer.MeasureText(Text, Font, new Size(int.MaxValue, Height), TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+        var textSize = TextRenderer.MeasureText(e.Graphics, Text, Font, new Size(int.MaxValue, Height), TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
         var contentWidth = textSize.Width + (Glyph == UiGlyph.None ? 0 : iconSize + GlyphGap);
         var startX = TextAlign == ContentAlignment.MiddleLeft ? ContentPadding : Math.Max(ContentPadding, (Width - contentWidth) / 2);
         if (Glyph != UiGlyph.None)
@@ -104,7 +106,7 @@ internal sealed class ModernButton : Button
         TextRenderer.DrawText(e.Graphics, Text, Font, new Rectangle(startX, _pressed ? 2 : 1, Math.Max(0, Width - startX - 10), Height - 3), foreground, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
         if (Focused && ShowFocusCues)
         {
-            using var focusPen = new Pen(Color.FromArgb(180, UiPalette.AccentBlue)) { DashStyle = DashStyle.Dot };
+            using var focusPen = new Pen(Color.FromArgb(180, UiPalette.AccentBlue)) { DashStyle = DashStyle.Solid };
             using var focusPath = RoundedRectangle(Rectangle.Inflate(rectangle, -3, -3), Math.Max(4, CornerRadius - 3));
             e.Graphics.DrawPath(focusPen, focusPath);
         }
@@ -133,10 +135,10 @@ internal sealed class ModernButton : Button
 
     private (Color Normal, Color Hover, Color Foreground, Color Border) Colors() => Variant switch
     {
-        ModernButtonVariant.Primary => (UiPalette.AccentBlue, Color.FromArgb(69, 174, 226), Color.White, Color.FromArgb(96, 189, 230)),
-        ModernButtonVariant.Danger => (Color.FromArgb(63, 43, 51), Color.FromArgb(91, 48, 57), UiPalette.DangerText, Color.FromArgb(135, 73, 79)),
-        ModernButtonVariant.Ghost => (UiPalette.DarkCanvas, UiPalette.SurfaceRaised, UiPalette.Text, UiPalette.Line),
-        _ => (UiPalette.SurfaceRaised, Color.FromArgb(43, 78, 103), UiPalette.Text, UiPalette.LineBright),
+        ModernButtonVariant.Primary => (UiPalette.AccentBlue, Color.FromArgb(52, 89, 132), UiPalette.DarkCanvas, UiPalette.AccentBlue),
+        ModernButtonVariant.Danger => (Color.FromArgb(255, 246, 243), Color.FromArgb(253, 230, 224), UiPalette.DangerText, Color.FromArgb(225, 192, 182)),
+        ModernButtonVariant.Ghost => (UiPalette.Sidebar, Color.FromArgb(220, 230, 241), UiPalette.Text, Color.Transparent),
+        _ => (UiPalette.SurfaceRaised, Color.FromArgb(232, 239, 246), UiPalette.Text, UiPalette.Line),
     };
 
     private static Color Blend(Color from, Color to, float amount)

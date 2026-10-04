@@ -19,6 +19,8 @@ import {readFullConfig} from './config-transfer';
 import {readFullReport} from './report-transfer';
 import {activeRunStates, canStart, canSave, readableFailure} from './view-state';
 import {AgentStatus, ConnectionState, EditableField, PairingRecord, PushMessage, RemoteConfig, RunProgress, RunReport, ViewName} from './types';
+import {icon} from './ui-icons';
+import {UiMotion} from './ui-motion';
 import './styles.css';
 
 type BusyAction = 'save' | 'start' | 'stop' | 'sync' | 'storage' | 'install';
@@ -33,6 +35,60 @@ const ENTRY_GUIDE_KEY = 'bettergi-remote-entry-guide-dismissed';
 const PRODUCTION_ORIGIN = 'https://bgiremote.163831.xyz';
 
 class App {
+  private motion?: UiMotion;
+  private previewTimer?: number;
+  private get previewMode(): boolean { return import.meta.env.DEV && new URLSearchParams(location.search).has('demo'); }
+
+  /** Dev-only visual rehearsal. This never creates a RemoteClient or executes an RPC. */
+  private runUiAction(action: 'save' | 'start' | 'stop' | 'sync', realAction: () => Promise<void>): void {
+    if (!this.previewMode) { void realAction(); return; }
+    if (action === 'sync') { this.showNotice('演示配置已同步；没有读取真实电脑', 'info'); return; }
+    if (action === 'save') {
+      this.loading = true; this.busyAction = 'save'; this.draw();
+      window.setTimeout(() => {
+        this.loading = false; this.busyAction = undefined;
+        this.dirtyFields.clear(); this.draftInputs.clear(); this.tasksDirty = false;
+        this.showNotice('演示修改已保存；没有写入电脑配置', 'info');
+      }, 650);
+      return;
+    }
+    if (!this.status || !this.config) return;
+    if (this.previewTimer) window.clearInterval(this.previewTimer);
+    if (action === 'stop') {
+      this.status = {...this.status, state: 'stopping'};
+      if (this.progress) this.progress = {...this.progress, state: 'stopping'};
+      this.draw();
+      window.setTimeout(() => {
+        this.status = {...this.status!, state: 'idle', activeRunId: undefined, gameRunning: false};
+        this.progress = undefined;
+        this.showNotice('演示任务已停止；没有发送真实快捷键', 'info');
+      }, 800);
+      return;
+    }
+    const tasks = this.config.tasks.filter(task => task.enabled).slice(0, 3);
+    const startedAt = new Date().toISOString();
+    let completed = 0;
+    const update = () => {
+      if (completed >= tasks.length) {
+        window.clearInterval(this.previewTimer); this.previewTimer = undefined;
+        this.status = {...this.status!, state: 'idle', activeRunId: undefined, gameRunning: false};
+        this.progress = undefined;
+        if (this.report) this.report = {...this.report, status: 'success', startedAt, finishedAt: new Date().toISOString(), durationSeconds: 7,
+          tasks: tasks.map(task => ({name: task.name, state: 'success' as const, step: '演示完成'})), errors: [], lootCoverage: '仅用于界面演示：物品数量为预设示例，不是实际任务收获。'};
+        this.showNotice('演示完成，可以查看示例报告；没有启动游戏', 'info');
+        return;
+      }
+      this.status = {...this.status!, state: 'running', activeRunId: 'ui-demo-run', gameRunning: true};
+      this.progress = {runId: 'ui-demo-run', state: 'running', currentTask: tasks[completed]!.name,
+        currentStep: ['正在进入任务', '正在执行任务步骤', '正在读取演示结果'][completed % 3],
+        currentLocation: '演示数据 · 不控制真实电脑', completedTasks: completed, totalTasks: tasks.length, observedAt: new Date().toISOString(),
+        tasks: tasks.map((task, index) => ({name: task.name, state: index < completed ? 'success' as const : index === completed ? 'running' as const : 'pending' as const}))};
+      this.draw();
+    };
+    update();
+    this.previewTimer = window.setInterval(() => { completed++; update(); }, 2400);
+  }
+
   private pairing?: PairingRecord;
   private client?: RemoteClient;
   private connection: ConnectionState = 'unpaired';
@@ -492,6 +548,8 @@ class App {
       this.taskListDomReordered = false;
     }
     render(this.template(), this.root);
+    this.motion ??= new UiMotion(this.root);
+    this.motion.settle(this.view);
     if (this.view === 'config' && this.config) queueMicrotask(() => this.mountSortable());
   }
 
@@ -499,15 +557,17 @@ class App {
     return html`
       <div class="app-shell">
         <header class="topbar">
-          <div>
+          <div class="brand-lockup">
+            <span class="brand-symbol">${icon('devices')}</span><div>
             <p class="brand">BetterGI Remote</p>
             <p class="computer-name">${this.pairing?.pcName ?? '等待绑定电脑'}${import.meta.env.DEV && new URLSearchParams(location.search).has('demo') ? ' · 演示数据' : ''}</p>
-          </div>
+          </div></div>
           ${connectionBadge(this.connection)}
         </header>
+        ${this.previewMode ? html`<div class="demo-ribbon">交互演示 · 模拟数据，不控制电脑或游戏</div>` : nothing}
         ${this.loading ? html`<md-linear-progress indeterminate aria-label="正在处理"></md-linear-progress>` : nothing}
         ${this.configReadProgress ? html`<p class="sync-progress" role="status">正在读取电脑设置：${this.configReadProgress.read} / ${this.configReadProgress.total} 项</p>` : nothing}
-        <main class=${this.view === 'config' ? 'content config-content' : 'content'}>
+        <main data-view=${this.view} class=${this.view === 'config' ? 'content config-content' : 'content'}>
           ${this.error ? html`<section class="inline-error" role="alert">${this.error}</section>` : nothing}
           ${this.status && !this.status.capabilities?.includes('desktopConfig') ? html`<section class="binding-reminder"><strong>请更新电脑端 BetterGI Remote</strong><p>网页已升级，电脑端当前为 ${this.status.agentVersion ?? '旧版'}。请在电脑托盘中检查更新，安装 0.4.0 或更高版本后使用扩展配置、已打开时启动和详细报告。现有绑定仍可使用。</p></section>` : nothing}
           ${this.view === 'home' ? this.homeView() : nothing}
@@ -516,7 +576,7 @@ class App {
           ${this.view === 'settings' ? this.settingsView() : nothing}
         </main>
         ${this.notice ? html`<div class="action-notice ${this.notice.tone}" role=${this.notice.tone === 'error' ? 'alert' : 'status'} aria-live=${this.notice.tone === 'error' ? 'assertive' : 'polite'} aria-atomic="true">${this.notice.message}</div>` : nothing}
-        ${this.pairing ? html`<nav class="bottom-nav" aria-label="主要页面">
+        ${this.pairing ? html`<nav class="bottom-nav" style=${`--active-tab: ${['home', 'config', 'reports', 'settings'].indexOf(this.view)}`} aria-label="主要页面">
           ${navButton('home', '首页', this.view, () => this.navigate('home'))}
           ${navButton('config', '配置', this.view, () => this.navigate('config'))}
           ${navButton('reports', '报告', this.view, () => this.navigate('reports'))}
@@ -541,9 +601,27 @@ class App {
         </div>
         <small class="asset-credit">角色画面 © 米哈游 / HoYoverse</small>
       </section>
+      <section class="action-panel">
+        <div>
+          <h2>${this.config?.name ?? '远程每日'}</h2>
+          <p>${this.hasDraft ? '有未保存的修改，请先在配置页保存' : this.config ? `${this.config.tasks.filter(task => task.enabled).length} 项任务已启用` : '请先同步配置'}</p>
+        </div>
+        ${running
+          ? html`<md-filled-button class="danger-button" ?disabled=${this.loading || this.connection !== 'online' || this.progress?.state === 'stopping' || this.status.state === 'stopping'} @click=${() => this.runUiAction('stop', () => this.stopTask())}>${icon('stop', 'icon')}${this.busyAction === 'stop' ? '正在发送…' : this.progress?.state === 'stopping' || this.status.state === 'stopping' ? '等待停止确认…' : '停止任务'}</md-filled-button>`
+          : html`<md-filled-button ?disabled=${!ready || !this.config || this.loading || this.hasDraft} @click=${() => this.runUiAction('start', () => this.startTask())}>${icon('play', 'icon')}${this.busyAction === 'start' ? '正在启动…' : '确认并启动'}</md-filled-button>`}
+      </section>
       ${this.bindingReminder()}
       ${this.status.betterGiUpdateAvailable ? html`<section class="binding-reminder"><strong>BetterGI 有新版本 ${this.status.betterGiLatestVersion}</strong><p>电脑当前为 ${this.status.betterGiVersion ?? '未知版本'}。更新 BetterGI 后，也请同步检查 BetterGI Remote 更新。</p></section>` : nothing}
       ${this.entryGuide()}
+      ${this.progress ? html`
+        <section class="run-panel">
+          <h2>${this.progress.currentTask ?? '正在准备'}</h2>
+          ${this.progress.currentStep ? html`<p aria-live="polite">${this.progress.currentStep}</p>` : nothing}
+          ${this.progress.currentLocation ? html`<p class="progress-location">${this.progress.currentLocation}</p>` : nothing}
+          <p>${this.progress.completedTasks} / ${this.progress.totalTasks} 项已完成</p>
+          <md-linear-progress value=${this.progress.totalTasks ? this.progress.completedTasks / this.progress.totalTasks : 0}></md-linear-progress>
+          ${this.progress.tasks?.length ? html`<ol class="run-task-list">${this.progress.tasks.map(task => html`<li class=${task.state}><span>${task.name}</span><strong>${statusText(task.state)}</strong>${task.message ? html`<small>${readableFailure(task.message)}</small>` : nothing}</li>`)}</ol>` : nothing}
+        </section>` : nothing}
       <section class="status-panel" aria-label="电脑状态">
         <div class="status-primary">
           <span class="status-dot ${ready ? 'good' : running ? 'busy' : 'bad'}"></span>
@@ -559,24 +637,7 @@ class App {
           ${metric('版本', this.status.betterGiVersion ?? '未知')}
         </div>
       </section>
-      ${this.progress ? html`
-        <section class="run-panel">
-          <h2>${this.progress.currentTask ?? '正在准备'}</h2>
-          ${this.progress.currentStep ? html`<p aria-live="polite">${this.progress.currentStep}</p>` : nothing}
-          ${this.progress.currentLocation ? html`<p class="progress-location">${this.progress.currentLocation}</p>` : nothing}
-          <p>${this.progress.completedTasks} / ${this.progress.totalTasks} 项已完成</p>
-          <md-linear-progress value=${this.progress.totalTasks ? this.progress.completedTasks / this.progress.totalTasks : 0}></md-linear-progress>
-          ${this.progress.tasks?.length ? html`<ol class="run-task-list">${this.progress.tasks.map(task => html`<li class=${task.state}><span>${task.name}</span><strong>${statusText(task.state)}</strong>${task.message ? html`<small>${readableFailure(task.message)}</small>` : nothing}</li>`)}</ol>` : nothing}
-        </section>` : nothing}
-      <section class="action-panel">
-        <div>
-          <h2>${this.config?.name ?? '远程每日'}</h2>
-          <p>${this.hasDraft ? '有未保存的修改，请先在配置页保存' : this.config ? `${this.config.tasks.filter(task => task.enabled).length} 项任务已启用` : '请先同步配置'}</p>
-        </div>
-        ${running
-          ? html`<md-filled-button class="danger-button" ?disabled=${this.loading || this.connection !== 'online' || this.progress?.state === 'stopping' || this.status.state === 'stopping'} @click=${() => void this.stopTask()}>${this.busyAction === 'stop' ? '正在发送…' : this.progress?.state === 'stopping' || this.status.state === 'stopping' ? '等待停止确认…' : '停止任务'}</md-filled-button>`
-          : html`<md-filled-button ?disabled=${!ready || !this.config || this.loading || this.hasDraft} @click=${() => void this.startTask()}>${this.busyAction === 'start' ? '正在启动…' : '确认并启动'}</md-filled-button>`}
-      </section>`;
+`;
   }
 
   private bindingReminder(): TemplateResult | typeof nothing {
@@ -625,25 +686,25 @@ class App {
     return html`
       <section class="page-heading">
         <h1>电脑配置</h1>
-        <p>读取电脑中的实际设置，按类别调整任务、全局参数与脚本调度组。</p>
+        <p>任务、参数与脚本调度</p>
       </section>
       <section class="config-controls" aria-label="配置分类与搜索">
         <div class="config-tabs" role="group" aria-label="配置分类">
           ${([['oneDragon', '一条龙'], ['global', '全局设置'], ['scriptGroup', '脚本调度']] as const).map(([scope, label]) => html`<button type="button" aria-pressed=${scope === this.configScope} @click=${() => { this.configScope = scope; this.draw(); }}>${label}<small>${this.config!.fields.filter(field => field.scope === scope).length}</small></button>`)}
         </div>
         <label class="config-search"><span>查找设置</span><input type="search" placeholder="例如：拾取、钓鱼、秘境、队伍" .value=${this.configSearch} @input=${(event: Event) => { this.configSearch = (event.currentTarget as HTMLInputElement).value; this.draw(); }}></label>
-        <p class="field-help">${this.config.applicationNotice ?? '保存时会自动让空闲的 BetterGI 重新载入配置。任务执行中不能修改配置。'}</p>
+        <details class="context-help config-help"><summary>保存与生效规则</summary><p>${this.config.applicationNotice ?? '保存时会自动让空闲的 BetterGI 重新载入配置。任务执行中不能修改配置。'}</p></details>
         ${this.hasDraft ? html`<p class="draft-note" role="status">手机有未保存的修改，保存后才会用于下一次任务。</p>` : nothing}
-        <md-text-button ?disabled=${this.loading || this.connection !== 'online'} @click=${() => void this.syncAll(true)}>重新同步电脑配置</md-text-button>
+        <md-text-button ?disabled=${this.loading || this.connection !== 'online'} @click=${() => this.runUiAction('sync', () => this.syncAll(true))}>重新同步电脑配置</md-text-button>
       </section>
       ${this.configScope === 'oneDragon' && !query ? html`<section class="task-editor">
         <div class="section-heading">
-          <div><h2>任务列表</h2><p>拖动调整顺序；脚本参数可在“脚本调度”中编辑</p></div>
+          <div><h2>任务列表</h2><p>拖动排序，按需启用</p></div>
         </div>
         <div id="task-list" class="task-list">
           ${this.config.tasks.map(task => html`
             <div class="task-row" data-id=${task.id}>
-              <button class="drag-handle" type="button" ?disabled=${!editable} aria-label=${`拖动 ${task.name}`} title="也可按 Alt+上下方向键调整顺序" @keydown=${(event: KeyboardEvent) => { if (event.key === 'ArrowUp' || event.key === 'ArrowDown') this.moveTask(task.id, event.key === 'ArrowUp' ? -1 : 1, event); }}>拖动</button>
+              <button class="drag-handle" type="button" ?disabled=${!editable} aria-label=${`拖动 ${task.name}`} title="也可按 Alt+上下方向键调整顺序" @keydown=${(event: KeyboardEvent) => { if (event.key === 'ArrowUp' || event.key === 'ArrowDown') this.moveTask(task.id, event.key === 'ArrowUp' ? -1 : 1, event); }}>${icon('drag')}<span class="sr-only">拖动</span></button>
               <div class="task-copy"><strong>${task.name}</strong>${task.isCustom ? html`<small>自定义配置组</small>` : nothing}</div>
               <md-switch ?disabled=${!editable} ?selected=${task.enabled} @change=${(event: Event) => this.updateTask(task.id, (event.currentTarget as HTMLInputElement & {selected: boolean}).selected)} aria-label=${`启用 ${task.name}`}></md-switch>
             </div>`)}
@@ -661,24 +722,24 @@ class App {
       </section>
       <section class="save-bar">
         <div><strong>${this.hasDraft ? '有待保存的修改' : '已与电脑同步'}</strong><p>${editable ? '保存后电脑与手机使用同一组参数' : this.loading ? '正在同步或保存，请稍候' : '任务结束且电脑在线时可保存'}</p></div>
-        <md-filled-button ?disabled=${!editable || !this.hasDraft} @click=${() => void this.saveConfig()}>${this.busyAction === 'save' ? '正在保存…' : '保存到电脑'}</md-filled-button>
+        <md-filled-button ?disabled=${!editable || !this.hasDraft} @click=${() => this.runUiAction('save', () => this.saveConfig())}>${this.busyAction === 'save' ? '正在保存…' : '保存到电脑'}</md-filled-button>
       </section>`;
   }
 
   private fieldTemplate(field: EditableField): TemplateResult {
     const disabled = this.loading || !canSave(this.status, this.connection);
-    const help = field.description ? html`<small class="field-help">${field.description}</small>` : nothing;
+    const help = field.description ? html`<details class="context-help"><summary aria-label=${field.label + '：帮助'}>说明</summary><p>${field.description}</p></details>` : nothing;
     if (field.type === 'toggle') {
-      return html`<label class="toggle-field"><span><strong>${field.label}</strong>${help}</span><md-switch ?disabled=${disabled} aria-label=${field.label} ?selected=${Boolean(field.value)} @change=${(event: Event) => this.updateField(field.path, (event.currentTarget as HTMLElement & {selected: boolean}).selected)}></md-switch></label>`;
+      return html`<div class="toggle-setting"><label class="toggle-field"><span><strong>${field.label}</strong></span><md-switch ?disabled=${disabled} aria-label=${field.label} ?selected=${Boolean(field.value)} @change=${(event: Event) => this.updateField(field.path, (event.currentTarget as HTMLElement & {selected: boolean}).selected)}></md-switch></label>${help}</div>`;
     }
     if (field.type === 'select') {
-      return html`<label class="input-field"><span>${field.label}</span><md-outlined-select ?disabled=${disabled} aria-label=${field.label} .value=${String(field.value ?? '')} @change=${(event: Event) => this.updateField(field.path, (event.currentTarget as HTMLSelectElement).value)}>${(field.options ?? []).map(option => html`<md-select-option .value=${option}><div slot="headline">${optionLabel(option)}</div></md-select-option>`)}</md-outlined-select>${help}</label>`;
+      return html`<div class="setting-field"><label class="input-field"><span>${field.label}</span><md-outlined-select ?disabled=${disabled} aria-label=${field.label} .value=${String(field.value ?? '')} @change=${(event: Event) => this.updateField(field.path, (event.currentTarget as HTMLSelectElement).value)}>${(field.options ?? []).map(option => html`<md-select-option .value=${option}><div slot="headline">${optionLabel(option)}</div></md-select-option>`)}</md-outlined-select></label>${help}</div>`;
     }
     if (field.type === 'multiSelect') {
       const selected = new Set(Array.isArray(field.value) ? field.value.map(String) : []);
       return html`<fieldset class="multi-field"><legend>${field.label}</legend><div class="multi-options">${(field.options ?? []).map(option => html`<label><md-checkbox ?disabled=${disabled} ?checked=${selected.has(option)} @change=${(event: Event) => this.toggleMulti(field, option, (event.currentTarget as HTMLInputElement).checked)}></md-checkbox><span>${optionLabel(option)}</span></label>`)}</div>${help}</fieldset>`;
     }
-    return html`<label class="input-field"><span>${field.label}</span><md-outlined-text-field ?disabled=${disabled} aria-label=${field.label} type=${field.type === 'number' ? 'number' : 'text'} step="any" .value=${this.draftInputs.get(field.path) ?? String(field.value ?? '')} min=${field.minimum ?? nothing} max=${field.maximum ?? nothing} @input=${(event: Event) => this.updateInputField(field, event)}></md-outlined-text-field>${help}</label>`;
+    return html`<div class="setting-field"><label class="input-field"><span>${field.label}</span><md-outlined-text-field ?disabled=${disabled} aria-label=${field.label} type=${field.type === 'number' ? 'number' : 'text'} step="any" .value=${this.draftInputs.get(field.path) ?? String(field.value ?? '')} min=${field.minimum ?? nothing} max=${field.maximum ?? nothing} @input=${(event: Event) => this.updateInputField(field, event)}></md-outlined-text-field></label>${help}</div>`;
   }
 
   private rememberFieldGroup(group: string, open: boolean): void {
@@ -723,7 +784,7 @@ class App {
         <div><span>固定控制入口</span><strong>${isTemporaryOrigin() ? '当前为临时测试地址' : PRODUCTION_ORIGIN}</strong></div>
       </section>
       <section class="settings-actions">
-        <md-outlined-button ?disabled=${this.connection !== 'online' || this.loading} @click=${() => void this.syncAll(true)}>${this.busyAction === 'sync' ? '正在同步…' : '立即同步'}</md-outlined-button>
+        <md-outlined-button ?disabled=${this.connection !== 'online' || this.loading} @click=${() => this.runUiAction('sync', () => this.syncAll(true))}>${this.busyAction === 'sync' ? '正在同步…' : '立即同步'}</md-outlined-button>
         <md-outlined-button @click=${() => void this.copyEntry()}>复制控制入口</md-outlined-button>
         ${!isStandaloneMode() ? html`<md-outlined-button ?disabled=${this.loading} @click=${() => void this.installApp()}>${this.busyAction === 'install' ? '正在处理…' : '添加到主屏幕'}</md-outlined-button>` : nothing}
         ${this.storageState === 'managed' ? html`<md-outlined-button ?disabled=${this.loading} @click=${() => void this.protectStorage()}>${this.busyAction === 'storage' ? '正在检查…' : '保护绑定数据'}</md-outlined-button>` : nothing}
@@ -762,11 +823,11 @@ function connectionBadge(state: ConnectionState): TemplateResult {
 }
 
 function navButton(view: ViewName, label: string, current: ViewName, action: () => void): TemplateResult {
-  return html`<button type="button" class=${view === current ? 'active' : ''} aria-current=${view === current ? 'page' : nothing} @click=${action}>${label}</button>`;
+  return html`<button type="button" class=${view === current ? 'active' : ''} aria-current=${view === current ? 'page' : nothing} @click=${action}>${icon(view)}<span>${label}</span></button>`;
 }
 
 function metric(label: string, value: string): TemplateResult {
-  return html`<div class="metric"><span>${label}</span><strong>${value}</strong></div>`;
+  return html`<div class="metric"><span>${icon(label === 'Windows' ? 'windows' : label === '版本' ? 'version' : 'game')}${label}</span><strong>${value}</strong></div>`;
 }
 
 function emptyPairing(): TemplateResult {

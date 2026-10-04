@@ -7,7 +7,7 @@ using BetterGI.RemoteLite.Security;
 
 namespace BetterGI.RemoteLite.Agent.UI;
 
-internal sealed class SettingsForm : Form
+internal sealed class SettingsForm : StudioForm
 {
     private readonly AgentSettingsStore _store;
     private readonly bool _firstRun;
@@ -36,7 +36,7 @@ internal sealed class SettingsForm : Form
     private readonly LinkLabel _controlEntry = new() { AutoSize = true };
     private readonly ToolTip _toolTip = new() { AutoPopDelay = 20_000, InitialDelay = 250, ReshowDelay = 100 };
     private readonly SurfacePanel _advancedPanel = new() { AutoSize = true, Dock = DockStyle.Top, Visible = false };
-    private readonly ModernButton _advancedToggle = new() { Text = "配置飞书机器人与 QQ 邮箱", Glyph = UiGlyph.Mail, Variant = ModernButtonVariant.Secondary, Height = 46, GlyphSize = 23, CanvasColor = UiPalette.DarkCanvas };
+    private readonly ModernButton _advancedToggle = new() { Text = "通知设置", Glyph = UiGlyph.Mail, Variant = ModernButtonVariant.Secondary, Height = 46, GlyphSize = 23, CanvasColor = UiPalette.DarkCanvas };
     private Panel? _connectionScrollHost;
     private SurfacePanel? _integrationPanel;
 
@@ -64,11 +64,11 @@ internal sealed class SettingsForm : Form
         _exitApplication = exitApplication ?? (() => { });
         Text = firstRun ? "开始使用 BetterGI Remote" : "BetterGI Remote 电脑端设置";
         StartPosition = FormStartPosition.CenterScreen;
-        AutoScaleMode = AutoScaleMode.Dpi;
-        Font = new Font("Microsoft YaHei UI", 9.5f, FontStyle.Regular);
+        UiPalette.ApplyWindow(this);
+        Font = UiPalette.Font(10);
         MinimumSize = new Size(1040, 760);
-        Size = new Size(1220, 900);
-        FormBorderStyle = FormBorderStyle.Sizable;
+        Size = new Size(1280, 900);
+        ResizeEnabled = true;
         BackColor = UiPalette.DarkCanvas;
         ShowIcon = false;
         SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
@@ -115,78 +115,56 @@ internal sealed class SettingsForm : Form
             Margin = Padding.Empty,
             Padding = Padding.Empty,
         };
-        shell.RowStyles.Add(new RowStyle(SizeType.Absolute, 156));
+        shell.RowStyles.Add(new RowStyle(SizeType.Absolute, 130));
         shell.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         shell.RowStyles.Add(new RowStyle(SizeType.Absolute, 68));
         shell.Controls.Add(BuildHeader(), 0, 0);
         shell.Controls.Add(BuildContent(), 0, 1);
         shell.Controls.Add(BuildFooter(), 0, 2);
-        return shell;
+        var outer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, BackColor = UiPalette.DarkCanvas, Margin = Padding.Empty };
+        outer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 184));
+        outer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        outer.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        var rail = new DesktopNavigationPanel(
+            () => _betterGiPath.Focus(),
+            _showPairing,
+            () => { if (!_advancedPanel.Visible) ToggleAdvanced(); _feishuWebhook.Focus(); },
+            () => FocusMaintenanceButton(shell, "检查更新"));
+        outer.Controls.Add(rail, 0, 0);
+        outer.Controls.Add(shell, 1, 0);
+        SizeChanged += (_, _) =>
+        {
+            var expanded = ClientSize.Width >= 1220 * DeviceDpi / 96;
+            rail.Visible = expanded;
+            var width = expanded ? 184 * DeviceDpi / 96 : 0;
+            if (outer.ColumnStyles[0].Width != width) outer.ColumnStyles[0].Width = width;
+        };
+        return outer;
+    }
+
+    private static void FocusMaintenanceButton(Control root, string text)
+    {
+        foreach (Control child in root.Controls)
+        {
+            if (child is ModernButton button && button.Text == text) { button.Focus(); return; }
+            FocusMaintenanceButton(child, text);
+        }
     }
 
     private Control BuildHeader()
     {
-        var asset = Path.Combine(AppContext.BaseDirectory, "assets", "spring-adventure-party.jpg");
-        var panel = new HeroPanel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = UiPalette.Sidebar,
-            Padding = Padding.Empty,
-            BackgroundImage = ImageAssetLoader.Load(asset),
-            ImageFocusX = 0.52f,
-            ImageFocusY = 0.46f,
-            ShadeFrom = Color.FromArgb(235, 8, 31, 48),
-            ShadeTo = Color.FromArgb(72, 8, 31, 48),
-        };
-        var copy = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = Color.Transparent,
-            ColumnCount = 1,
-            RowCount = 3,
-            Padding = new Padding(44, 10, 34, 5),
-            Margin = Padding.Empty,
-        };
+        var hero = new HeroPanel { Dock = DockStyle.Fill, BackColor = UiPalette.Surface,
+            BackgroundImage = ImageAssetLoader.Load(Path.Combine(AppContext.BaseDirectory, "assets", "spring-adventure-party.jpg")),
+            ImageFocusX = .65f, ImageFocusY = .4f,
+            ShadeFrom = Color.FromArgb(250, 255, 255, 255), ShadeTo = Color.FromArgb(100, 255, 255, 255) };
+        var copy = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Color.Transparent, ColumnCount = 1, RowCount = 2, Padding = new Padding(28, 22, 24, 18), Margin = Padding.Empty };
         copy.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        copy.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        copy.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        copy.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        copy.Controls.Add(new Label
-        {
-            Text = $"REMOTE {ProductDefaults.ProductVersion}",
-            AutoSize = true,
-            Dock = DockStyle.Top,
-            Font = new Font("Segoe UI", 9f, FontStyle.Bold),
-            ForeColor = UiPalette.AccentCyan,
-            BackColor = Color.Transparent,
-            Margin = new Padding(3, 0, 0, 0),
-            TextAlign = ContentAlignment.MiddleLeft,
-        }, 0, 0);
-        copy.Controls.Add(new Label
-        {
-            Text = _firstRun ? "连接你的 BetterGI" : "电脑端设置",
-            AutoSize = true,
-            Dock = DockStyle.Top,
-            Font = new Font("Microsoft YaHei UI", 27, FontStyle.Bold),
-            ForeColor = Color.White,
-            BackColor = Color.Transparent,
-            Margin = Padding.Empty,
-            TextAlign = ContentAlignment.MiddleLeft,
-            UseCompatibleTextRendering = true,
-        }, 0, 1);
-        copy.Controls.Add(new Label
-        {
-            Text = _firstRun ? "通常只需要一分钟。选择 BetterGI 后，扫描二维码即可在手机上使用。" : "日常任务在手机操作；这里仅用于更换 BetterGI、通知或重新配置。",
-            AutoSize = true,
-            Dock = DockStyle.Top,
-            ForeColor = Color.FromArgb(215, 232, 240),
-            BackColor = Color.Transparent,
-            Margin = new Padding(2, 1, 0, 0),
-            TextAlign = ContentAlignment.TopLeft,
-            UseCompatibleTextRendering = true,
-        }, 0, 2);
-        panel.Controls.Add(copy);
-        return panel;
+        copy.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+        copy.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        copy.Controls.Add(new Label { Text = "BetterGI Remote", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Font = UiPalette.Font(21, FontStyle.Bold), ForeColor = UiPalette.Text, BackColor = Color.Transparent, Margin = Padding.Empty }, 0, 0);
+        copy.Controls.Add(new Label { Text = "手机控制 · 电脑执行", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Font = UiPalette.Font(10.5f), ForeColor = UiPalette.TextMuted, BackColor = Color.Transparent, Margin = Padding.Empty }, 0, 1);
+        hero.Controls.Add(copy);
+        return hero;
     }
 
     private Control BuildContent()
@@ -194,7 +172,7 @@ internal sealed class SettingsForm : Form
         var content = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            Padding = new Padding(24, 16, 24, 14),
+            Padding = new Padding(20, 20, 20, 18),
             ColumnCount = 2,
             RowCount = 1,
             BackColor = UiPalette.DarkCanvas,
@@ -204,8 +182,8 @@ internal sealed class SettingsForm : Form
         content.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         var pathActions = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = Padding.Empty, Padding = Padding.Empty };
-        var detect = new ModernButton { Text = "自动查找", Width = 136, Height = 46, Glyph = UiGlyph.Search, GlyphSize = 22, Margin = new Padding(0, 0, 10, 0) };
-        var browse = new ModernButton { Text = "手动选择", Width = 136, Height = 46, Glyph = UiGlyph.Folder, GlyphSize = 22, Margin = Padding.Empty };
+        var detect = new ModernButton { Text = "自动查找", Width = 142, Height = 46, Glyph = UiGlyph.Search, GlyphSize = 22, Margin = new Padding(0, 0, 10, 0) };
+        var browse = new ModernButton { Text = "手动选择", Width = 142, Height = 46, Glyph = UiGlyph.Folder, GlyphSize = 22, Margin = Padding.Empty };
         detect.Click += (_, _) => DetectBetterGi(silent: false);
         browse.Click += (_, _) => BrowseBetterGi();
         pathActions.Controls.Add(detect);
@@ -213,55 +191,39 @@ internal sealed class SettingsForm : Form
 
         var integration = new SurfacePanel
         {
-            Dock = DockStyle.Fill,
-            AutoSize = false,
+            Dock = DockStyle.Top,
+            AutoSize = true,
             ColumnCount = 1,
             RowCount = 6,
-            Padding = new Padding(24, 22, 24, 20),
+            Padding = new Padding(22, 24, 22, 22),
             Margin = Padding.Empty,
         };
         integration.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        integration.Controls.Add(SectionHeading("BetterGI 连接", "自动识别版本与配置结构，未来版本会先进行兼容探测。", UiGlyph.Game), 0, 0);
-        integration.Controls.Add(Field("游戏工具位置", _betterGiPath, "自动查找常见安装位置；找不到时只需手动选择一次 BetterGI.exe。", pathActions, actionInInputRow: true), 0, 1);
+        integration.Controls.Add(SectionHeading("连接", "电脑配置是事实来源，手机仅编辑允许的选项。", UiGlyph.Game), 0, 0);
+        integration.Controls.Add(Field("BetterGI 位置", _betterGiPath, "自动查找常见安装位置；找不到时只需手动选择一次 BetterGI.exe。", pathActions, actionInInputRow: true), 0, 1);
         integration.Controls.Add(StatusRow(), 0, 2);
-        integration.Controls.Add(Field("远程任务配置", _sourceConfig, "首次创建时复制为“远程每日”，不会覆盖原配置。"), 0, 3);
+        integration.Controls.Add(Field("一条龙配置", _sourceConfig, "首次创建时复制为“远程每日”，不会覆盖原配置。"), 0, 3);
         integration.Controls.Add(ConnectionDetails(), 0, 4);
         BuildAdvancedPanel();
         integration.Controls.Add(_advancedPanel, 0, 5);
         _integrationPanel = integration;
 
-        _connectionScrollHost = new BufferedScrollPanel { Dock = DockStyle.Fill, AutoScroll = false, BackColor = UiPalette.DarkCanvas, Margin = new Padding(0, 0, 12, 0) };
+        _connectionScrollHost = new BufferedScrollPanel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = UiPalette.DarkCanvas, Margin = new Padding(0, 0, 12, 0) };
         _connectionScrollHost.Controls.Add(integration);
         content.Controls.Add(_connectionScrollHost, 0, 0);
-        content.Controls.Add(BuildMaintenancePanel(), 1, 0);
+        var maintenanceScroll = new BufferedScrollPanel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = UiPalette.DarkCanvas, Margin = Padding.Empty };
+        maintenanceScroll.Controls.Add(BuildMaintenancePanel());
+        content.Controls.Add(maintenanceScroll, 1, 0);
         return content;
     }
 
     private static Control SectionHeading(string title, string description, UiGlyph glyph)
     {
-        var panel = new TableLayoutPanel { AutoSize = true, Dock = DockStyle.Top, ColumnCount = 2, Margin = new Padding(0, 0, 0, 18) };
-        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 50));
+        var panel = new TableLayoutPanel { AutoSize = true, Dock = DockStyle.Top, ColumnCount = 2, Margin = new Padding(0, 0, 0, 20), AccessibleDescription = description };
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 34));
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        var icon = new GlyphView { Glyph = glyph, GlyphColor = UiPalette.AccentCyan, Size = new Size(32, 32), Margin = new Padding(3, 2, 12, 0) };
-        var copy = new TableLayoutPanel { AutoSize = true, Dock = DockStyle.Top, ColumnCount = 1, RowCount = 2, Margin = Padding.Empty };
-        copy.Controls.Add(new Label
-        {
-            AutoSize = true,
-            Text = title,
-            Font = new Font("Microsoft YaHei UI", 14f, FontStyle.Bold),
-            ForeColor = UiPalette.Text,
-            Margin = Padding.Empty,
-        }, 0, 0);
-        copy.Controls.Add(new Label
-        {
-            AutoSize = true,
-            Text = description,
-            ForeColor = UiPalette.TextMuted,
-            Margin = new Padding(0, 5, 0, 0),
-            MaximumSize = new Size(620, 0),
-        }, 0, 1);
-        panel.Controls.Add(icon, 0, 0);
-        panel.Controls.Add(copy, 1, 0);
+        panel.Controls.Add(new GlyphView { Glyph = glyph, GlyphColor = UiPalette.TextMuted, Size = new Size(22, 22), Margin = new Padding(0, 4, 10, 0) }, 0, 0);
+        panel.Controls.Add(new Label { AutoSize = true, Text = title, Font = UiPalette.Font(12, FontStyle.Bold), ForeColor = UiPalette.Text, Margin = new Padding(0, 2, 0, 0) }, 1, 0);
         return panel;
     }
 
@@ -291,7 +253,7 @@ internal sealed class SettingsForm : Form
     {
         Text = text,
         AutoSize = true,
-        Font = new Font("Microsoft YaHei UI", 9.5f, FontStyle.Bold),
+        Font = UiPalette.Font(9.5f),
         ForeColor = UiPalette.Text,
         Margin = new Padding(0, 3, 0, 4),
     };
@@ -300,19 +262,21 @@ internal sealed class SettingsForm : Form
     {
         var panel = new SurfacePanel
         {
-            Dock = DockStyle.Fill,
+            Dock = DockStyle.Top,
             ColumnCount = 1,
-            RowCount = 4,
+            RowCount = 5,
             Margin = new Padding(12, 0, 0, 0),
             Padding = new Padding(22),
             FillColor = UiPalette.Surface,
+            AutoSize = true,
         };
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        panel.Controls.Add(SectionHeading("手机与维护", $"BetterGI Remote {ProductDefaults.ProductVersion} · 版本与常用操作", UiGlyph.Status), 0, 0);
+        panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        panel.Controls.Add(SectionHeading("手机与更新", $"BetterGI Remote {ProductDefaults.ProductVersion} · 版本与常用操作", UiGlyph.Devices), 0, 0);
         _maintenanceReleaseStatus.ForeColor = UiPalette.TextMuted;
         _maintenanceReleaseStatus.Margin = new Padding(4, 0, 4, 6);
         _maintenanceReleaseStatus.MaximumSize = new Size(330, 0);
@@ -323,18 +287,18 @@ internal sealed class SettingsForm : Form
             AutoSize = true,
             Dock = DockStyle.Top,
             ColumnCount = 2,
-            RowCount = 4,
+            RowCount = 3,
             Margin = new Padding(0, 4, 0, 0),
         };
         actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        for (var row = 0; row < 4; row++) actions.RowStyles.Add(new RowStyle(SizeType.Absolute, 66));
+        for (var row = 0; row < 3; row++) actions.RowStyles.Add(new RowStyle(SizeType.Absolute, 66));
         var pairing = MaintenanceButton("显示二维码", UiGlyph.Qr, _showPairing);
         var status = MaintenanceButton("当前状态", UiGlyph.Status, _showStatus);
         var openWeb = MaintenanceButton("打开手机网页", UiGlyph.Globe, _openControlEntry);
         var rebind = MaintenanceButton("重新绑定", UiGlyph.Link, _rebindPhone);
         var unbind = MaintenanceButton("解除绑定", UiGlyph.Unlink, _unbindPhone);
-        var update = MaintenanceButton("Remote 更新", UiGlyph.Refresh, () => { }, ModernButtonVariant.Primary);
+        var update = MaintenanceButton("检查更新", UiGlyph.Refresh, () => { }, ModernButtonVariant.Primary);
         update.Click += async (_, _) =>
         {
             update.Enabled = false;
@@ -346,7 +310,7 @@ internal sealed class SettingsForm : Form
                 _exitApplication();
                 return;
             }
-            update.Text = "Remote 更新";
+            update.Text = "检查更新";
             update.Enabled = true;
         };
         var betterGiUpdate = MaintenanceButton("本体更新", UiGlyph.Game, () => { });
@@ -361,17 +325,55 @@ internal sealed class SettingsForm : Form
         };
         var uninstall = MaintenanceButton("卸载 Remote", UiGlyph.Trash, StartUninstall, ModernButtonVariant.Danger);
 
-        actions.Controls.Add(pairing, 0, 0);
-        actions.Controls.Add(status, 1, 0);
-        actions.Controls.Add(openWeb, 0, 1);
-        actions.Controls.Add(rebind, 1, 1);
-        actions.Controls.Add(unbind, 0, 2);
-        actions.Controls.Add(betterGiUpdate, 1, 2);
-        actions.Controls.Add(update, 0, 3);
-        actions.Controls.Add(uninstall, 1, 3);
+        actions.RowCount = 4;
+        actions.RowStyles.Clear();
+        foreach (var height in new[] { 64, 56, 64, 56 }) actions.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
+        var phoneRow = ActionRow("手机连接", string.IsNullOrEmpty(_store.Current.BoundPhoneDeviceId) ? "尚未绑定" : "已绑定", pairing);
+        actions.Controls.Add(phoneRow, 0, 0);
+        actions.SetColumnSpan(phoneRow, 2);
+        actions.Controls.Add(status, 0, 1);
+        actions.Controls.Add(openWeb, 1, 1);
+        var updateRow = ActionRow("BetterGI Remote", "v" + ProductDefaults.ProductVersion, update);
+        actions.Controls.Add(updateRow, 0, 2);
+        actions.SetColumnSpan(updateRow, 2);
+        var more = MaintenanceButton("更多管理", UiGlyph.Chevron, () => { }, ModernButtonVariant.Ghost);
+        actions.Controls.Add(betterGiUpdate, 0, 3);
+        actions.Controls.Add(more, 1, 3);
+        var management = new TableLayoutPanel { AutoSize = true, Dock = DockStyle.Top, ColumnCount = 2, RowCount = 2, Visible = false, Margin = new Padding(0, 4, 0, 8) };
+        management.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        management.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        management.RowStyles.Add(new RowStyle(SizeType.Absolute, 60));
+        management.RowStyles.Add(new RowStyle(SizeType.Absolute, 60));
+        management.Controls.Add(rebind, 0, 0);
+        management.Controls.Add(unbind, 1, 0);
+        management.Controls.Add(uninstall, 0, 1);
+        management.SetColumnSpan(uninstall, 2);
+        more.Click += (_, _) => { management.Visible = !management.Visible; more.Text = management.Visible ? "收起管理" : "更多管理"; };
         panel.Controls.Add(actions, 0, 2);
-        panel.Controls.Add(BuildNotificationEntry(), 0, 3);
+        panel.Controls.Add(management, 0, 3);
+        panel.Controls.Add(BuildNotificationEntry(), 0, 4);
         return panel;
+    }
+
+    private static Control ActionRow(string title, string detail, ModernButton action)
+    {
+        var row = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = new Padding(7, 5, 7, 5) };
+        row.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 152));
+        var copy = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, ColumnCount = 1, Margin = Padding.Empty };
+        copy.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        copy.RowStyles.Add(new RowStyle(SizeType.Percent, 55));
+        copy.RowStyles.Add(new RowStyle(SizeType.Percent, 45));
+        copy.Controls.Add(new Label { Text = title, Font = UiPalette.Font(10.5f), ForeColor = UiPalette.Text, Dock = DockStyle.Fill, TextAlign = ContentAlignment.BottomLeft, Margin = Padding.Empty }, 0, 0);
+        copy.Controls.Add(new Label { Text = detail, Font = UiPalette.Font(9), ForeColor = UiPalette.TextMuted, Dock = DockStyle.Fill, TextAlign = ContentAlignment.TopLeft, Margin = Padding.Empty }, 0, 1);
+        row.Controls.Add(copy, 0, 0);
+        action.Margin = new Padding(8, 3, 0, 3);
+        action.GlyphSize = 19;
+        action.GlyphGap = 7;
+        action.ContentPadding = 10;
+        row.Controls.Add(action, 1, 0);
+        return row;
     }
 
     private static ModernButton MaintenanceButton(string text, UiGlyph glyph, Action action, ModernButtonVariant variant = ModernButtonVariant.Secondary)
@@ -380,15 +382,15 @@ internal sealed class SettingsForm : Form
         {
             Text = text,
             Glyph = glyph,
-            GlyphSize = 25,
-            GlyphGap = 12,
-            ContentPadding = 18,
+            GlyphSize = 22,
+            GlyphGap = 9,
+            ContentPadding = 13,
             Variant = variant,
             Dock = DockStyle.Fill,
             Margin = new Padding(7, 7, 7, 7),
             Height = 58,
-            TextAlign = ContentAlignment.MiddleLeft,
-            Font = new Font("Microsoft YaHei UI", 10f, FontStyle.Bold),
+            TextAlign = ContentAlignment.MiddleCenter,
+            Font = UiPalette.Font(10.5f),
         };
         button.Click += (_, _) => action();
         return button;
@@ -422,7 +424,7 @@ internal sealed class SettingsForm : Form
         {
             Text = "任务完成通知",
             AutoSize = true,
-            Font = new Font("Microsoft YaHei UI", 10.5f, FontStyle.Bold),
+            Font = UiPalette.Font(10.5f),
             ForeColor = UiPalette.Text,
             Margin = new Padding(0, 3, 0, 0),
         }, 1, 0);
@@ -445,10 +447,10 @@ internal sealed class SettingsForm : Form
         var uninstaller = Path.Combine(AppContext.BaseDirectory, "unins000.exe");
         if (!File.Exists(uninstaller))
         {
-            MessageBox.Show(this, "当前是开发或便携运行目录，没有找到安装器生成的卸载程序。请从正式安装目录运行后再卸载。", "无法启动卸载", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            AppDialog.Show(this, "当前是开发或便携运行目录，没有找到安装器生成的卸载程序。请从正式安装目录运行后再卸载。", "无法启动卸载", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
-        if (MessageBox.Show(this, "将关闭 BetterGI Remote 并打开卸载向导。电脑上的设置与绑定数据会保留，确认继续吗？", "卸载 BetterGI Remote", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+        if (AppDialog.Show(this, "将关闭 BetterGI Remote 并打开卸载向导。电脑上的设置与绑定数据会保留，确认继续吗？", "卸载 BetterGI Remote", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
         {
             return;
         }
@@ -461,7 +463,7 @@ internal sealed class SettingsForm : Form
         }
         catch (Exception exception)
         {
-            MessageBox.Show(this, "无法启动卸载向导：\r\n" + exception.Message, "卸载失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            AppDialog.Show(this, "无法启动卸载向导：\r\n" + exception.Message, "卸载失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 
@@ -482,10 +484,11 @@ internal sealed class SettingsForm : Form
         footer.Controls.Add(save);
         footer.Controls.Add(new Label
         {
-            Text = "安全写入远程专用配置，并自动开启 BetterGI 奖励识别。",
+            Text = "保存后生效",
             AutoSize = true,
             ForeColor = UiPalette.TextMuted,
-            Location = new Point(30, 25),
+            Location = new Point(28, 25),
+            Font = UiPalette.Font(9),
         });
         AcceptButton = save;
         return footer;
@@ -533,31 +536,34 @@ internal sealed class SettingsForm : Form
         return panel;
     }
 
-    private static Control Field(string label, Control input, string? help, Control? action = null, bool actionInInputRow = false)
+    private Control Field(string label, Control input, string? help, Control? action = null, bool actionInInputRow = false)
     {
-        var wrapper = new TableLayoutPanel { AutoSize = true, Dock = DockStyle.Top, ColumnCount = action is null ? 1 : 2, Margin = new Padding(0, 0, 0, 14) };
+        var wrapper = new TableLayoutPanel { AutoSize = true, Dock = DockStyle.Top, ColumnCount = action is null || actionInInputRow ? 1 : 2, Margin = new Padding(0, 0, 0, 22) };
         wrapper.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        if (action is not null)
+        if (action is not null && !actionInInputRow) wrapper.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        var heading = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Dock = DockStyle.Top, Margin = new Padding(0, 0, 0, 9) };
+        heading.Controls.Add(new Label { Text = label, AutoSize = true, Font = UiPalette.Font(10.5f), ForeColor = UiPalette.Text, Margin = new Padding(0, 3, 0, 0) });
+        if (!string.IsNullOrWhiteSpace(help))
         {
-            wrapper.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            input.AccessibleDescription = help;
+            var info = new ModernButton { Glyph = UiGlyph.Info, Text = "", Width = 24, Height = 26, GlyphSize = 16, ContentPadding = 4, Variant = ModernButtonVariant.Ghost, CanvasColor = UiPalette.Surface, Margin = new Padding(8, 0, 0, 0), AccessibleName = label + "：帮助" };
+            _toolTip.SetToolTip(info, help);
+            info.Click += (_, _) => _toolTip.Show(help, info, 0, info.Height, 10000);
+            heading.Controls.Add(info);
         }
-        wrapper.Controls.Add(new Label { Text = label, AutoSize = true, Font = new Font("Microsoft YaHei UI", 9.5f, FontStyle.Bold), ForeColor = UiPalette.Text, Margin = new Padding(2, 0, 0, 8) }, 0, 0);
+        wrapper.Controls.Add(heading, 0, 0);
         if (action is not null)
         {
-            wrapper.Controls.Add(action, 1, actionInInputRow ? 1 : 0);
-            if (!actionInInputRow) wrapper.SetRowSpan(action, help is null ? 2 : 3);
-            action.Margin = actionInInputRow ? new Padding(12, 0, 0, 0) : new Padding(12, 1, 0, 0);
+            wrapper.Controls.Add(action, actionInInputRow ? 0 : 1, actionInInputRow ? 2 : 0);
+            if (!actionInInputRow) wrapper.SetRowSpan(action, 2);
+            action.Margin = actionInInputRow ? new Padding(0, 10, 0, 0) : new Padding(12, 0, 0, 0);
         }
         var hostedInput = input is TextBox or ComboBox ? new ModernInputHost(input) : input;
         hostedInput.Dock = DockStyle.Top;
-        hostedInput.Margin = new Padding(0, 0, 0, 6);
+        hostedInput.Margin = Padding.Empty;
         input.BackColor = input is TextBox or ComboBox or ModernChoiceBox ? UiPalette.Input : Color.Transparent;
         input.ForeColor = input is TextBox or ComboBox or ModernChoiceBox ? UiPalette.Text : UiPalette.AccentCyan;
         wrapper.Controls.Add(hostedInput, 0, 1);
-        if (!string.IsNullOrWhiteSpace(help))
-        {
-            wrapper.Controls.Add(new Label { Text = help, AutoSize = true, MaximumSize = new Size(620, 0), ForeColor = UiPalette.TextMuted, Margin = new Padding(2, 0, 0, 0) }, 0, 2);
-        }
         return wrapper;
     }
 
@@ -566,15 +572,15 @@ internal sealed class SettingsForm : Form
         _advancedPanel.Visible = !_advancedPanel.Visible;
         if (_connectionScrollHost is not null)
         {
-            _connectionScrollHost.AutoScroll = _advancedPanel.Visible;
+            _connectionScrollHost.AutoScroll = true;
             if (_integrationPanel is not null)
             {
-                _integrationPanel.AutoSize = _advancedPanel.Visible;
-                _integrationPanel.Dock = _advancedPanel.Visible ? DockStyle.Top : DockStyle.Fill;
+                _integrationPanel.AutoSize = true;
+                _integrationPanel.Dock = DockStyle.Top;
             }
             if (!_advancedPanel.Visible) _connectionScrollHost.AutoScrollPosition = Point.Empty;
         }
-        _advancedToggle.Text = _advancedPanel.Visible ? "收起通知设置" : "配置飞书机器人与 QQ 邮箱";
+        _advancedToggle.Text = _advancedPanel.Visible ? "收起通知" : "通知设置";
         _advancedToggle.Glyph = _advancedPanel.Visible ? UiGlyph.Chevron : UiGlyph.Mail;
     }
 
@@ -610,7 +616,7 @@ internal sealed class SettingsForm : Form
             }
             if (!silent)
             {
-                MessageBox.Show(this, "没有在常见位置找到可兼容的 BetterGI，请点击“手动选择”。", ProductDefaults.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                AppDialog.Show(this, "没有在常见位置找到可兼容的 BetterGI，请点击“手动选择”。", ProductDefaults.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
         finally
@@ -638,6 +644,7 @@ internal sealed class SettingsForm : Form
         var latest = _store.Current.LatestKnownBetterGiVersion;
         var latestText = string.IsNullOrWhiteSpace(latest) ? "尚未检查 BetterGI 官方版本" : $"官方最新版 {latest}";
         _betterGiReleaseStatus.Text = latestText;
+        _betterGiReleaseStatus.Visible = !string.IsNullOrWhiteSpace(latest);
         _betterGiReleaseStatus.ForeColor = UiPalette.TextMuted;
         _maintenanceReleaseStatus.Text = $"当前 BetterGI：{check.Version ?? "未识别"}\r\n{latestText}";
         var selected = _sourceConfig.SelectedItem?.ToString();
@@ -672,7 +679,7 @@ internal sealed class SettingsForm : Form
     {
         var official = string.Equals(_relayUrl.Text.Trim().TrimEnd('/'), ProductDefaults.RelayBaseUrl, StringComparison.OrdinalIgnoreCase);
         _serverStatus.Text = official ? "BetterGI Remote 正式服务" : "自定义服务（高级设置）";
-        _serverStatus.ForeColor = official ? UiPalette.Pine : Color.FromArgb(182, 111, 36);
+        _serverStatus.ForeColor = official ? UiPalette.Pine : UiPalette.Warning;
     }
 
     private async Task SaveAsync(Button saveButton)
@@ -763,7 +770,7 @@ internal sealed class SettingsForm : Form
         }
         catch (Exception exception)
         {
-            MessageBox.Show(this, exception.Message, "无法完成设置", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            AppDialog.Show(this, exception.Message, "无法完成设置", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
         finally
         {

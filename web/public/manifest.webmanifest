@@ -4,8 +4,8 @@
   "description": "控制已绑定电脑上的 BetterGI 每日任务",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f4f7f5",
-  "theme_color": "#0f7658",
+  "background_color": "#f4f6f9",
+  "theme_color": "#f4f6f9",
   "lang": "zh-CN",
   "icons": [
     {

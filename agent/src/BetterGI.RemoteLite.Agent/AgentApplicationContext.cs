@@ -134,14 +134,14 @@ internal sealed class AgentApplicationContext : ApplicationContext
         }
         if (!settings.IsConfigured || string.IsNullOrEmpty(settings.ProtectedPairingSecret))
         {
-            MessageBox.Show("请先完成电脑端设置。", ProductDefaults.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            AppDialog.Show("请先完成电脑端设置。", ProductDefaults.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
         _runtime?.AllowPairing(TimeSpan.FromMinutes(5));
         var secret = SecretProtector.UnprotectBytes(settings.ProtectedPairingSecret);
         if (secret is null)
         {
-            MessageBox.Show("绑定密钥无法解密，请执行重新绑定。", ProductDefaults.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Error);
+            AppDialog.Show("绑定密钥无法解密，请执行重新绑定。", ProductDefaults.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Error);
             return;
         }
         try
@@ -162,7 +162,7 @@ internal sealed class AgentApplicationContext : ApplicationContext
 
     private void RebindPhone()
     {
-        if (MessageBox.Show("重新绑定会立即使旧手机失效。确认继续吗？", "重新绑定", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+        if (AppDialog.Show("重新绑定会立即使旧手机失效。确认继续吗？", "重新绑定", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
         {
             return;
         }
@@ -173,10 +173,10 @@ internal sealed class AgentApplicationContext : ApplicationContext
 
     private void UnbindPhone()
     {
-        if (MessageBox.Show("解除后当前手机会立即失效。确认解除绑定吗？", "解除手机绑定", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+        if (AppDialog.Show("解除后当前手机会立即失效。确认解除绑定吗？", "解除手机绑定", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
         RotatePairingSecret();
         RestartRuntime();
-        MessageBox.Show("已解除手机绑定。需要再次使用时，请从托盘菜单打开新的绑定二维码。", ProductDefaults.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Information);
+        AppDialog.Show("已解除手机绑定。需要再次使用时，请从托盘菜单打开新的绑定二维码。", ProductDefaults.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
     private void RotatePairingSecret()
@@ -219,7 +219,7 @@ internal sealed class AgentApplicationContext : ApplicationContext
         var text = status is null
             ? "电脑端设置尚未完成。"
             : $"电脑: {status.PcName}\r\n手机连接: {(status.PhonePeerOnline ? "在线" : "离线")}\r\n绑定有效期: {(status.BindingExpiresAt is { } expiry ? expiry.ToLocalTime().ToString("yyyy-MM-dd") : "未绑定")}\r\nWindows: {(status.WindowsUnlocked ? "未锁屏" : "已锁屏")}\r\nBetterGI: {(status.BetterGiRunning ? "运行中" : "已关闭")}\r\n原神: {(status.GameRunning ? "运行中" : "已关闭")}\r\n任务状态: {status.State}\r\n手机入口: {ProductDefaults.ControlEntryUrl}";
-        MessageBox.Show(text, "当前状态", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        AppDialog.Show(text, "当前状态", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
     private static void OpenControlEntry()
@@ -245,7 +245,7 @@ internal sealed class AgentApplicationContext : ApplicationContext
     {
         if (_checkingUpdate)
         {
-            if (manual) MessageBox.Show("正在检查或下载更新，请稍候。", "检查更新", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            if (manual) AppDialog.Show("正在检查或下载更新，请稍候。", "检查更新", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return false;
         }
         _checkingUpdate = true;
@@ -255,15 +255,15 @@ internal sealed class AgentApplicationContext : ApplicationContext
             _settingsStore.Update(value => value.LastUpdateCheckAt = DateTimeOffset.UtcNow);
             if (update is null)
             {
-                if (manual) MessageBox.Show($"当前已是最新版 {ProductDefaults.ProductVersion}。", "检查更新", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                if (manual) AppDialog.Show($"当前已是最新版 {ProductDefaults.ProductVersion}。", "检查更新", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return false;
             }
             if (_runtime?.GetStatus().State is "starting" or "running" or "stopping" or "updating")
             {
-                if (manual) MessageBox.Show("当前任务仍在执行。请等待任务结束后再安装更新。", "暂不能更新", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                if (manual) AppDialog.Show("当前任务仍在执行。请等待任务结束后再安装更新。", "暂不能更新", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return false;
             }
-            var answer = MessageBox.Show(
+            var answer = AppDialog.Show(
                 $"发现 BetterGI Remote {update.Version}。\r\n\r\n点击“是”将从官方更新服务下载、校验并安装。",
                 "发现新版本",
                 MessageBoxButtons.YesNo,
@@ -281,7 +281,7 @@ internal sealed class AgentApplicationContext : ApplicationContext
         }
         catch (Exception exception)
         {
-            if (manual) MessageBox.Show("检查或安装更新失败：\r\n" + exception.Message, "检查更新", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            if (manual) AppDialog.Show("检查或安装更新失败：\r\n" + exception.Message, "检查更新", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return false;
         }
         finally { _checkingUpdate = false; }
@@ -308,7 +308,7 @@ internal sealed class AgentApplicationContext : ApplicationContext
             var release = await _betterGiUpdates.CheckLatestAsync();
             if (release is null)
             {
-                if (manual) MessageBox.Show("未能识别 BetterGI 官方最新版本。", "检查 BetterGI 更新", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                if (manual) AppDialog.Show("未能识别 BetterGI 官方最新版本。", "检查 BetterGI 更新", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
@@ -326,7 +326,7 @@ internal sealed class AgentApplicationContext : ApplicationContext
                 if (manual)
                 {
                     var compatibility = installed.Verified ? "当前版本已经过 BetterGI Remote 验证。" : installed.Message;
-                    MessageBox.Show($"当前 BetterGI {installedVersion} 已是官方最新版。\r\n\r\n{compatibility}", "检查 BetterGI 更新", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    AppDialog.Show($"当前 BetterGI {installedVersion} 已是官方最新版。\r\n\r\n{compatibility}", "检查 BetterGI 更新", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 return;
             }
@@ -336,7 +336,7 @@ internal sealed class AgentApplicationContext : ApplicationContext
                 : $"发现 BetterGI {release.Version}，当前电脑为 {installedVersion}。";
             if (manual)
             {
-                var answer = MessageBox.Show(message + "\r\n\r\n是否打开 BetterGI 官方发布页？更新 BetterGI 后，请同时保持 BetterGI Remote 为最新版。", "发现 BetterGI 更新", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+                var answer = AppDialog.Show(message + "\r\n\r\n是否打开 BetterGI 官方发布页？更新 BetterGI 后，请同时保持 BetterGI Remote 为最新版。", "发现 BetterGI 更新", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
                 if (answer == DialogResult.Yes)
                 {
                     Process.Start(new ProcessStartInfo(release.ReleaseUrl) { UseShellExecute = true });
@@ -355,7 +355,7 @@ internal sealed class AgentApplicationContext : ApplicationContext
         }
         catch (Exception exception)
         {
-            if (manual) MessageBox.Show("检查 BetterGI 更新失败：\r\n" + exception.Message, "检查 BetterGI 更新", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            if (manual) AppDialog.Show("检查 BetterGI 更新失败：\r\n" + exception.Message, "检查 BetterGI 更新", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 
@@ -365,7 +365,7 @@ internal sealed class AgentApplicationContext : ApplicationContext
         _uiContext.Post(_ =>
         {
             var shortId = request.DeviceId.Length > 8 ? request.DeviceId[..8] : request.DeviceId;
-            var result = MessageBox.Show(
+            var result = AppDialog.Show(
                 $"手机名称: {request.DeviceLabel}\r\n设备代码: {shortId}\r\n\r\n确认将这台手机绑定到当前电脑吗？",
                 "确认手机绑定",
                 MessageBoxButtons.YesNo,

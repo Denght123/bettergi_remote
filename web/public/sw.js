@@ -1,4 +1,4 @@
-const CACHE = 'bettergi-remote-shell-v10';
+const CACHE = 'bettergi-remote-shell-v11';
 const SHELL = ['/', '/manifest.webmanifest', '/icon.svg', '/assets/spring-adventure-party.webp', '/assets/spring-adventure-party-mobile.webp', '/assets/paimon-guide.webp'];
 
 self.addEventListener('install', event => {

@@ -29,7 +29,7 @@ internal sealed class ModernInputHost : Control
         }
         input.BackColor = UiPalette.Input;
         input.ForeColor = UiPalette.Text;
-        input.Font = new Font("Microsoft YaHei UI", 10f, FontStyle.Regular);
+        input.Font = UiPalette.Font(10.5f);
         input.GotFocus += (_, _) => Invalidate();
         input.LostFocus += (_, _) => Invalidate();
         Controls.Add(input);
@@ -45,7 +45,8 @@ internal sealed class ModernInputHost : Control
         base.OnLayout(e);
         if (_input is ComboBox)
         {
-            _input.Bounds = new Rectangle(10, 7, Math.Max(0, ClientSize.Width - 20), 29);
+            var height = Math.Min(ClientSize.Height - 8, _input.PreferredSize.Height);
+            _input.Bounds = new Rectangle(12, Math.Max(0, (ClientSize.Height - height) / 2), Math.Max(0, ClientSize.Width - 24), height);
             if (_comboDropIndicator is not null)
             {
                 _comboDropIndicator.Bounds = new Rectangle(Math.Max(0, ClientSize.Width - 39), 5, 33, Math.Max(1, ClientSize.Height - 10));
@@ -54,7 +55,8 @@ internal sealed class ModernInputHost : Control
         }
         else
         {
-            _input.Bounds = new Rectangle(12, 12, Math.Max(0, ClientSize.Width - 24), 22);
+            var height = Math.Min(ClientSize.Height - 8, _input.PreferredSize.Height);
+            _input.Bounds = new Rectangle(12, Math.Max(0, (ClientSize.Height - height) / 2), Math.Max(0, ClientSize.Width - 24), height);
         }
     }
 
@@ -84,7 +86,7 @@ internal sealed class ModernInputHost : Control
         var rectangle = new Rectangle(0, 0, Math.Max(1, Width - 1), Math.Max(1, Height - 1));
         using var path = ModernButton.RoundedRectangle(rectangle, 10);
         using var fill = new SolidBrush(UiPalette.Input);
-        using var border = new Pen(_input.Focused ? UiPalette.AccentBlue : _hovered ? UiPalette.LineBright : UiPalette.Line, _input.Focused ? 1.6f : 1f);
+        using var border = new Pen(_input.Focused ? UiPalette.AccentBlue : _hovered ? UiPalette.LineBright : UiPalette.Line, _input.Focused ? 1.2f : .8f);
         e.Graphics.FillPath(fill, path);
         e.Graphics.DrawPath(border, path);
     }
